@@ -1,0 +1,6 @@
+[package]
+name = "cs4240"
+version = "0.1.0"
+authors = ["Christopher Tam <christophertam@gatech.edu>", "Dhruv Mehra <dmehra6@gatech.edu"]
+
+[dependencies]
