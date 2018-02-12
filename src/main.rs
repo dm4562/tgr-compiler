@@ -6,7 +6,7 @@ use regex::Regex;
 
 fn main() {
     let keywords = Regex::new(r"^((array)|(begin)|(boolean)|(break)|(do)|(else)|(end)|(enddo)|(endif)|(false)|(float)|(for)|(func)|(if)|(in)|(int)|(let)|(of)|(return)|(then)|(to)|(true)|(type)|(unit)|(var)|(while)|,|:|;|\(|\)|\[|\]|\{|\}|\.|\+|-|\*|/|=|<|>|<>|<=|>=|&|\||:=)$").unwrap();
-    let id = Regex::new(r"^((_.*(\d|[A-Za-z])[^\s]*)|(([A-Za-z])[^\s]*))$").unwrap();
+    let id = Regex::new(r"^((_[A-Za-z_]*(\d|[A-Za-z])[A-Za-z_]*)|(([A-Za-z])[A-Za-z_]*))$").unwrap();
     let intlit = Regex::new(r"^(\d*)$").unwrap();
     let floatlit = Regex::new(r"^(\d*\.\d*)$").unwrap();
     let comment = Regex::new(r"/\*(([^\*/])*)\*/").unwrap();
@@ -38,7 +38,7 @@ fn main() {
     let mut pre_matches_multiple = false;
 
     while end <= buffer.len() {
-        println!("U{}- {}- {}- {}- {}", &buffer[start..end], start, end, pre_match_found, match_found);
+        // println!("U{}- {}- {}- {}- {}", &buffer[start..end], start, end, pre_match_found, match_found);
         if buffer[end - 1..end].eq(" ") {
             // if pre_matches_multiple {
             //     println!("Ambiguous keyword");
@@ -51,15 +51,15 @@ fn main() {
             }
 
             if pre_match_found == 3 {
-                println!("{} ", &buffer[start..end - 1]);
+                print!("{} ", &buffer[start..end - 1]);
             } else {
-                println!("{}:{} ", &buffer[start..end - 1], &output_vec[pre_match_found as usize]);
+                print!("{}:{} ", &buffer[start..end - 1], &output_vec[pre_match_found as usize]);
             }
 
             start = end;
             end += 1;
             pre_match_found = -1;
-            println!("M{}- {}- {}- {}- {}", &buffer[start..end], start, end, pre_match_found, match_found);
+            // println!("M{}- {}- {}- {}- {}", &buffer[start..end], start, end, pre_match_found, match_found);
         }
 
         for (i, reg) in vec.iter().enumerate() {
@@ -77,9 +77,9 @@ fn main() {
             // eprintln!("{} - {} - {}", match_found, pre_match_found, pre_matches_multiple);
             // eprintln!("Syntax error or ambiguous error");
             if pre_match_found == 3 {
-                println!("{} ", &buffer[start..end - 1]);
+                print!("{} ", &buffer[start..end - 1]);
             } else {
-                println!("{}:{} ", &buffer[start..end - 1], &output_vec[pre_match_found as usize]);
+                print!("{}:{} ", &buffer[start..end - 1], &output_vec[pre_match_found as usize]);
             }
 
             start = end - 1;
@@ -95,9 +95,9 @@ fn main() {
 
     if pre_match_found != -1 {
         if pre_match_found == 3 {
-            println!("{} ", &buffer[start..end - 1]);
+            print!("{} ", &buffer[start..end - 1]);
         } else {
-            println!("{}:{} ", &buffer[start..end - 1], &output_vec[pre_match_found as usize]);
+            print!("{}:{} ", &buffer[start..end - 1], &output_vec[pre_match_found as usize]);
         }
     }
 
