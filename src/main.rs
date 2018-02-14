@@ -63,7 +63,6 @@ fn main() {
     let mut q: VecDeque<Token> = VecDeque::new();
 
     while end <= buffer.len() {
-        // println!("U{}- {}- {}- {}- {}", &buffer[start..end], start, end, pre_match_found, match_found);
         if buffer[end - 1..end].eq(" ") {
 
             if pre_match_found < 0 {
@@ -91,12 +90,11 @@ fn main() {
                 token_type: pre_match_found as usize
             };
             q.push_back(token);
-            // push_queue(&q, &buffer, &start, &end, &pre_match_found);
 
             start = end;
             end += 1;
             pre_match_found = -1;
-            // println!("M{}- {}- {}- {}- {}", &buffer[start..end], start, end, pre_match_found, match_found);
+
         }
 
         for (i, reg) in regex_vec.iter().enumerate() {
@@ -123,7 +121,6 @@ fn main() {
                 token_type: pre_match_found as usize
             };
             q.push_back(token);
-            // push_queue(&q, &buffer, &start, &end, &pre_match_found);
 
             if pre_match_found <= 2 && pre_match_found >= 0 {
                 need_keyword2 = true;
@@ -153,7 +150,6 @@ fn main() {
             token_type: pre_match_found as usize
         };
         q.push_back(token);
-        // push_queue(&q, &buffer, &start, &end, &pre_match_found);
     }
 
     print_tokens(&q);
