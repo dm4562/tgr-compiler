@@ -1,12 +1,11 @@
 extern crate regex;
 extern crate clap;
 
-use std::io::{self, Read};
+use std::io::{Read};
 use std::collections::VecDeque;
 use regex::Regex;
 use std::fmt::Write;
-use std::process;
-use clap::{Arg, ArgMatches, App, SubCommand};
+use clap::{Arg, App};
 use std::fs::File;
 
 
@@ -34,22 +33,6 @@ fn print_tokens(queue: &VecDeque<Token>, print_tokens: &bool) {
     }
     output = output.trim().to_string();
     print!("{}", &output);
-}
-
-fn read_stdin() -> String {
-    let comment = Regex::new(r"/\*(([^\*/])*)\*/").unwrap();
-    let white_space = Regex::new(r"\s+").unwrap();
-    let mut buffer = String::new();
-    let stdin = io::stdin();
-    let mut handle = stdin.lock();
-
-    handle.read_to_string(&mut buffer);
-
-    buffer = comment.replace_all(&buffer, "").into_owned();
-
-    buffer = white_space.replace_all(&buffer, " ").into_owned();
-    buffer = buffer.trim().to_string();
-    buffer
 }
 
 fn read_file(file_name: String) -> String {
