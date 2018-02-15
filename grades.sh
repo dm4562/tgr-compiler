@@ -11,7 +11,7 @@ do
   let runs++
   #echo "Processing $f to ${f%.tgr}.tokens"
   # generate tokens file
-  ./compiler < $f > ${f%.tgr}.tokens
+  ./compiler $f --tokens > ${f%.tgr}.tokens
   # generate diff file
   diff -iw ${f%.tgr}_correct.tokens ${f%.tgr}.tokens > ${f%.tgr}.diff
   # if diff file is non-empty (indicating a difference)
