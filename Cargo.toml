@@ -5,3 +5,4 @@ authors = ["Christopher Tam <christophertam@gatech.edu>", "Dhruv Mehra <dmehra6@
 
 [dependencies]
 regex = "~0.2"
+clap = "2.30.0"

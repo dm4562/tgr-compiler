@@ -1,9 +1,14 @@
 extern crate regex;
+extern crate clap;
 
 use std::io::{self, Read};
 use std::collections::VecDeque;
 use regex::Regex;
 use std::fmt::Write;
+use std::process;
+use clap::{Arg, ArgMatches, App, SubCommand};
+use std::fs::File;
+
 
 #[derive(Debug)]
 struct Token<'a> {
@@ -14,7 +19,11 @@ struct Token<'a> {
     token_type: usize
 }
 
-fn print_tokens(queue: &VecDeque<Token>) {
+fn print_tokens(queue: &VecDeque<Token>, print_tokens: &bool) {
+    if !print_tokens {
+        return;
+    }
+
     let mut output: String = String::new();
     for token in queue {
         if token.token_name == "keyword" {
@@ -43,8 +52,36 @@ fn read_stdin() -> String {
     buffer
 }
 
+fn read_file(file_name: String) -> String {
+    let comment = Regex::new(r"/\*(([^\*/])*)\*/").unwrap();
+    let white_space = Regex::new(r"\s+").unwrap();
+    let mut buffer = String::new();
+    let mut file = File::open(file_name).expect("Unable to open the file");
+    file.read_to_string(&mut buffer).expect("Unable to read the file");
+    buffer = comment.replace_all(&buffer, "").into_owned();
+    buffer = white_space.replace_all(&buffer, " ").into_owned();
+    buffer = buffer.trim().to_string();
+    buffer
+}
+
 fn main() {
-    let buffer = read_stdin();
+    let matches = App::new("TigerCompiler")
+        .version("0.1")
+        .author("Christopher Tam and Dhruv Mehra")
+        .about("A simple Scanner for Tiger programming language!")
+        .arg(Arg::with_name("file")
+            .help("Tiger file to scan for tokens")
+            .required(true))
+        .arg(Arg::with_name("tokens")
+            .short("t")
+            .long("tokens")
+            .help("Print tokens to stdout"))
+        .get_matches();
+
+    let token = matches.is_present("tokens");
+    let file_name = matches.value_of("file").unwrap().to_string();
+
+    let buffer = read_file(file_name);
 
     let keyword1 = Regex::new(r"^((array)|(begin)|(boolean)|(break)|(do)|(else)|(end)|(enddo)|(endif)|(false)|(float)|(for)|(func)|(if)|(in)|(int)|(let)|(of)|(return)|(then)|(to)|(true)|(type)|(unit)|(var)|(while))$").unwrap();
     let keyword2 = Regex::new(r"^(,|:|;|\(|\)|\[|\]|\{|\}|\.|\+|-|\*|/|=|<|>|<>|<=|>=|&|\||:=)$").unwrap();
@@ -67,7 +104,7 @@ fn main() {
 
             if pre_match_found < 0 {
                 eprintln!("Syntax error 1");
-                print_tokens(&q);
+                print_tokens(&q, &token);
                 return;
             }
 
@@ -75,7 +112,7 @@ fn main() {
             if need_keyword2 && pre_match_found != 4 {
                 q.pop_back();
                 eprintln!("Syntax error 2");
-                print_tokens(&q);
+                print_tokens(&q, &token);
                 return;
             }
 
@@ -107,7 +144,7 @@ fn main() {
             if need_keyword2 && pre_match_found != 4 {
                 q.pop_back();
                 eprintln!("Syntax error 3");
-                print_tokens(&q);
+                print_tokens(&q, &token);
             }
 
             if need_keyword2 && pre_match_found == 4 {
@@ -139,7 +176,7 @@ fn main() {
         if need_keyword2 && pre_match_found != 4 {
             q.pop_back();
             eprintln!("Syntax error 5");
-            print_tokens(&q);
+            print_tokens(&q, &token);
             return;
         }
 
@@ -152,5 +189,5 @@ fn main() {
         q.push_back(token);
     }
 
-    print_tokens(&q);
+    print_tokens(&q, &token);
 }
