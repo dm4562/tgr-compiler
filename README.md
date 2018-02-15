@@ -26,25 +26,36 @@ To compile the compiler, navigate to the root of the repository and run:
 $ cargo build
 ```
 
+Alternatively:
+
+```
+$ make debug
+```
+
 To compile the program with optimizations, run:
 
 ```
 $ cargo build --release
 ```
 
+Alternatively,
+
+```
+$ make
+```
 
 ## Running Project 1
 
-The compiled binaries are located in the *target* folder, and `cargo` offers a convenient, single command way to compile and run the code.
+The compiled binaries are located in the *target* folder, and `cargo` offers a convenient, single command way to compile and run the code. Due to how `cargo` handles the build process the directory `p1` could not be created.
 
-For example, to run the compiler on a file named `everything.tgr`, execute:
-
-```
-$ cargo run --release -- < everything.tgr
-```
-
-For the grade script, `compiler` handles this command, but because the compiler reads from stdin, the proper command in the script should be:
+For example, to run the compiler on a file named `everything.tgr` and print the tokens to stdout, execute:
 
 ```
-./compiler < $f > ${f%.tgr}.tokens
+$ cargo run --release -- everything.tgr --tokens
+```
+
+For the grade script, `compiler` handles this command, as an example to print out tokens of `everything.tgr` execute the following:
+
+```
+./compiler $f --tokens > ${f%.tgr}.tokens
 ```
