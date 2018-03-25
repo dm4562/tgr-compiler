@@ -7,3 +7,6 @@ authors = ["Christopher Tam <christophertam@gatech.edu>", "Dhruv Mehra <dmehra6@
 regex = "~0.2"
 clap = "2.30.0"
 lazy_static = "1.0"
+serde_json = "1.0"
+serde = "1.0"
+serde_derive = "1.0"

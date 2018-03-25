@@ -1,15 +1,21 @@
 extern crate clap;
+
 #[macro_use]
 extern crate lazy_static;
 extern crate regex;
 
+#[macro_use]
+extern crate serde_derive;
+
 mod scanner;
+mod parser;
 
 use clap::{Arg, App};
 use regex::Regex;
 use std::io::Read;
 use std::fs::File;
 use std::process;
+
 
 fn read_file(file_name: String) -> String {
     let comment = Regex::new(r"/\*(([^\*/])*)\*/").unwrap();
@@ -36,6 +42,10 @@ fn main() {
             .short("t")
             .long("tokens")
             .help("Print tokens to stdout"))
+        .arg(Arg::with_name("ast")
+            .short("a")
+            .long("ast")
+            .help("Print out the Abstract Syntax Tree"))
         .get_matches();
 
     let should_print_tokens = matches.is_present("tokens");
@@ -54,5 +64,16 @@ fn main() {
 
     if should_print_tokens {
         scanner::print_tokens(&tokens);
+    }
+
+    if matches.is_present("ast") {
+        let table = match parser::load_parse_table() {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("{}", e);
+                process::exit(1);
+            }
+        };
+        println!("{}", table);
     }
 }

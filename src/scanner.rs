@@ -4,11 +4,11 @@ use std::fmt::Write;
 
 #[derive(Debug)]
 pub struct Token<'a> {
-    val: &'a str,
-    token_name: &'a str,
-    index: usize,
-    length: usize,
-    token_type: usize
+    pub val: &'a str,
+    pub token_name: &'a str,
+    pub index: usize,
+    pub length: usize,
+    pub token_type: usize
 }
 
 pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, &'static str> {
