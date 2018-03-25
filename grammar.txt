@@ -1,0 +1,106 @@
+PROGRAM -> let DECLSEG in STMTS end
+DECLSEG -> TYPEDECLS VARDECLS FUNCDECLS
+TYPEDECLS -> EPSILON
+TYPEDECLS -> TYPEDECL TYPEDECLS
+TYPEDECL -> type id := TYPE ;
+TYPE -> boolean
+TYPE -> int
+TYPE -> float
+TYPE -> unit
+TYPE -> id
+TYPE -> array [ intlit ] of TYPE
+VARDECLS -> EPSILON
+VARDECLS -> VARDECL VARDECLS
+VARDECL -> var IDS : TYPE OPTINIT ;
+IDS -> id
+IDS -> id , IDS
+OPTINIT -> EPSILON
+OPTINIT -> := CONST
+FUNCDECLS ->
+FUNCDECLS -> FUNCDECL FUNCDECLS
+FUNCDECL -> func id ( PARAMS ) : TYPE begin STMTS end ;
+PARAMS -> EPSILON
+PARAMS -> NEPARAMS
+NEPARAMS -> PARAM
+NEPARAMS -> PARAM , NEPARAMS
+PARAM -> id : TYPE
+STMTS -> FULLSTMT
+STMTS -> FULLSTMT STMTS
+FULLSTMT -> STMT ;
+STMT -> LVALUE := EXPR
+STMT -> if EXPR then STMTS endif
+STMT -> if EXPR then STMTS else STMTS endif
+STMT -> while EXPR do STMTS enddo
+STMT -> for id := EXPR to EXPR do STMTS enddo
+STMT -> break
+STMT -> return EXPR
+LVALUE -> id OPTOFFSET
+OPTOFFSET -> EPSILON
+OPTOFFSET -> [ EXPR ]
+EXPRS -> EPSILON
+EXPRS -> NEEXPRS
+NEEXPRS -> EXPR
+NEEXPRS -> EXPR , NEEXPRS
+EXPR -> CLAUSE EXPRP
+EXPRP -> EPSILON
+EXPRP -> ~ CLAUSE EXPRP
+CLAUSE -> PRED CLAUSEP
+CLAUSEP -> EPSILON
+CLAUSEP -> & PRED CLAUSEP
+PRED -> AEXPR
+PRED -> AEXPR CMP AEXPR
+CMP -> =
+CMP -> <>
+CMP -> <=
+CMP -> >=
+CMP -> <
+CMP -> >
+AEXPR -> TERM AEXPRP
+AEXPRP -> EPSILON
+AEXPRP -> LINOP TERM
+LINOP -> +
+LINOP -> -
+TERM -> FACTOR TERMP
+TERMP -> EPSILON
+TERMP -> NONLINOP FACTOR TERMP
+NONLINOP -> *
+NONLINOP -> /
+FACTOR -> CONST
+FACTOR -> id
+FACTOR -> id [ EXPR ]
+FACTOR -> id ( EXPRS )
+FACTOR -> ( EXPR )
+CONST -> true
+CONST -> false
+CONST -> _
+CONST -> intlit
+CONST -> floatlit
+
+
+==========
+Remove left recursion from EXPR, TERM, AEXPR and CLAUSE
+
+In this grammar I have replaced the "|" operator with "~" because hackingoff.com reserves | to be alternation for grammar productions
+
+==========
+[taken from hackingoff.com]
+
+LL(1) Parsing Table
+On the LL(1) Parsing Table's Meaning and Construction
+
+ -  The top row corresponds to the columns for all the potential terminal symbols, augmented with $ to represent the end of the parse.
+ -  The leftmost column and second row are all zero filled, to accomodate the way Fischer and LeBlanc wrote their parser's handling of abs().
+ -  The remaining rows correspond to production rules in the original grammar that you typed in.
+ -  Each entry in that row maps the left-hand-side (LHS) of a production rule onto a line-number. That number is the line in which the LHS had that specific column symbol in its predict set.
+
+ -  If a terminal is absent from a non-terminal's predict set, an error code is placed in the table. If that terminal is in follow(that non-terminal), the error is a POP error. Else, it's a SCAN error.
+
+    POP error code = # of predict table productions + 1
+
+    SCAN error code = # of predict table productions + 2
+
+In practice, you'd want to tear the top, label row off of the table and stick it in a comment, so that you can make sense of your table. The remaining table can be used as is.
+
+LL(1) Parsing Push-Map
+
+This structure maps each production rule in the expanded grammar (seen as the middle column in the predict table above) to a series of states that the LL parser pushes onto the stack.
