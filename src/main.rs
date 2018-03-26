@@ -54,7 +54,7 @@ fn main() {
     let buffer = read_file(file_name);
 
     // Step 1: run the scanner to parse the tokens
-    let tokens = match scanner::parse_tokens(&buffer) {
+    let mut tokens = match scanner::parse_tokens(&buffer) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("{}", e);
@@ -74,6 +74,17 @@ fn main() {
                 process::exit(1);
             }
         };
+
+        let grammar = match parser::load_grammar() {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("{}", e);
+                process::exit(1);
+            }
+        };
         println!("{}", table);
+        println!("{}", grammar);
+
+        parser::parse_input(&grammar, &table, &mut tokens);
     }
 }
