@@ -1,14 +1,25 @@
 use regex::Regex;
 use std::collections::VecDeque;
 use std::fmt::Write;
+use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Token<'a> {
-    val: &'a str,
-    token_name: &'a str,
-    index: usize,
-    length: usize,
-    token_type: usize
+    pub val: &'a str,
+    pub token_name: &'a str,
+    pub index: usize,
+    pub length: usize,
+    pub token_type: usize
+}
+
+impl<'a> fmt::Display for Token<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.token_name == "keyword" {
+            write!(f, "{}", self.val)
+        } else {
+            write!(f, "{}:{}", self.val, self.token_name)
+        }
+    }
 }
 
 pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, &'static str> {
@@ -123,11 +134,12 @@ pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, &'static str> {
 pub fn print_tokens(queue: &VecDeque<Token>) {
     let mut output: String = String::new();
     for token in queue {
-        if token.token_name == "keyword" {
-            write!(&mut output, "{} ", &token.val).unwrap();
-        } else {
-            write!(&mut output, "{}:{} ", &token.val, &token.token_name).unwrap();
-        }
+        // if token.token_name == "keyword" {
+        //     write!(&mut output, "{} ", &token.val).unwrap();
+        // } else {
+        //     write!(&mut output, "{}:{} ", &token.val, &token.token_name).unwrap();
+        // }
+        write!(&mut output, "{} ", &token).unwrap();
     }
     output = output.trim().to_string();
     print!("{}", &output);

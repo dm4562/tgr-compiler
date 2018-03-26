@@ -3,3 +3,5 @@
 *.tokens
 *.tgr
 tests/
+.DS_Store
+.vscode/
