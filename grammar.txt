@@ -169,7 +169,7 @@ CONST -> floatlit
 
 ==========
 Remove left recursion from EXPR, TERM, AEXPR and CLAUSE
-Left factored STMT, IDS, NEEXPRS, PRED, and FACTOR
+Left factored IDS, NEPARAMS, STMT, NEEXPRS, PRED, and FACTOR
 
 In this grammar I have replaced the "|" operator with "~" because hackingoff.com reserves | to be alternation for grammar productions
 
