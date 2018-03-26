@@ -74,6 +74,7 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
     let mut token = tokens.pop_front();
     let mut stack: VecDeque<String> = VecDeque::new();
     let mut ast: Vec<String> = Vec::new();
+    let mut recurse_idx_stack: Vec<usize> = Vec::new();
     stack.push_front("1".to_string());
 
     loop {
@@ -108,7 +109,7 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
             } else {
                 // error
                 let mut err = String::new();
-                write!(&mut err, "Looking for {}", &stack.front().unwrap()).unwrap();
+                write!(&mut err, "looking for {}", get_readable_production_name(&stack.front().unwrap())).unwrap();
                 return Err(err);
             }
         } else {
@@ -144,21 +145,46 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
 
             stack.pop_front();
 
-            if !production.is_empty() {
-                // Push a special token to mark where the newly expanded production will end
-                stack.push_front("@#".to_owned());
-                
-                // Mark the end of an expanded non-terminal
-                ast.push("@(".to_owned());
+            // Push original productions onto the AST
+            {
+                let prod_name = grammar.nonterminals.get(non_terminal).unwrap();
+                if prod_name.ends_with("^") {
+                    // Push the index of the latest left-recursive production
+                    recurse_idx_stack.push(ast.len());
+                } else if prod_name.ends_with("^'") {
+                    if production.is_empty() {
+                        recurse_idx_stack.pop();
+                    } else {
+                        let recurse_idx = recurse_idx_stack.last_mut().unwrap();
 
-                // Push the expanded productions onto the stack (in reverse order)
-                for rule in production.iter().rev() {
-                    stack.push_front(rule.to_owned());
+                        // Insert at the recurse index to reintroduce left recursion
+                        ast.insert(*recurse_idx, "@(".to_owned());
+                        ast.insert(*recurse_idx + 1, get_readable_production_name(prod_name));
+                        *recurse_idx += 2;
+
+                        // Close the left recursive call inserted above
+                        ast.push("@)".to_owned());
+                    }
+                }
+                
+                if !prod_name.ends_with("'") {
+                    if !production.is_empty() {
+                        // Push a special token to mark where the newly expanded production will end
+                        stack.push_front("@#".to_owned());
+                        
+                        // Mark the end of an expanded non-terminal
+                        ast.push("@(".to_owned());
+                    }
+
+                    ast.push(get_readable_production_name(prod_name));
                 }
             }
 
-            // Push the expanded non-terminal onto the AST
-            ast.push(grammar.nonterminals.get(non_terminal).unwrap().to_lowercase());
+            // Push the expanded productions onto the stack (in reverse order)
+            for rule in production.iter().rev() {
+                stack.push_front(rule.to_owned());
+            }
+            
         }
     }
 
@@ -173,6 +199,10 @@ fn get_token_ast_value(token: &Token) -> String {
         "floatlit"  => token.val.to_owned(),
         _           => token.token_name.to_owned(),
     }
+}
+
+fn get_readable_production_name(name: &str) -> String {
+    name.to_lowercase().replace("^", "").replace("'", "")
 }
 
 fn debug_production(production: &Vec<String>, nonterminals: &Vec<String>) -> String {

@@ -30,52 +30,52 @@ STMTS -> FULLSTMT STMTS'
 STMTS' -> EPSILON
 STMTS' -> STMTS
 FULLSTMT -> STMT ;
-STMT -> LVALUE := EXPR
-STMT -> if EXPR then STMTS STMT'
-STMT -> while EXPR do STMTS enddo
-STMT -> for id := EXPR to EXPR do STMTS enddo
+STMT -> LVALUE := EXPR^
+STMT -> if EXPR^ then STMTS STMT'
+STMT -> while EXPR^ do STMTS enddo
+STMT -> for id := EXPR^ to EXPR^ do STMTS enddo
 STMT -> break
-STMT -> return EXPR
+STMT -> return EXPR^
 STMT' -> endif
 STMT' -> else STMTS endif
 LVALUE -> id OPTOFFSET
 OPTOFFSET -> EPSILON
-OPTOFFSET -> [ EXPR ]
+OPTOFFSET -> [ EXPR^ ]
 EXPRS -> EPSILON
 EXPRS -> NEEXPRS
-NEEXPRS -> EXPR NEEXPRS'
+NEEXPRS -> EXPR^ NEEXPRS'
 NEEXPRS' -> EPSILON
 NEEXPRS' -> , NEEXPRS
-EXPR -> CLAUSE EXPR'
-EXPR' -> EPSILON
-EXPR' -> ~ CLAUSE EXPR'
-CLAUSE -> PRED CLAUSE'
-CLAUSE' -> EPSILON
-CLAUSE' -> & CLAUSE
-PRED -> AEXPR PRED'
+EXPR^ -> CLAUSE^ EXPR^'
+EXPR^' -> EPSILON
+EXPR^' -> | CLAUSE^ EXPR^'
+CLAUSE^ -> PRED CLAUSE^'
+CLAUSE^' -> EPSILON
+CLAUSE^' -> & PRED CLAUSE^'
+PRED -> AEXPR^ PRED'
 PRED' -> EPSILON
-PRED' -> CMP AEXPR
+PRED' -> CMP AEXPR^
 CMP -> =
 CMP -> <>
 CMP -> <=
 CMP -> >=
 CMP -> <
 CMP -> >
-AEXPR -> TERM AEXPR'
-AEXPR' -> EPSILON
-AEXPR' -> LINOP AEXPR
+AEXPR^ -> TERM^ AEXPR^'
+AEXPR^' -> EPSILON
+AEXPR^' -> LINOP TERM^ AEXPR^'
 LINOP -> +
 LINOP -> -
-TERM -> FACTOR TERM'
-TERM' -> EPSILON
-TERM' -> NONLINOP TERM
+TERM^ -> FACTOR TERM^'
+TERM^' -> EPSILON
+TERM^' -> NONLINOP FACTOR TERM^'
 NONLINOP -> *
 NONLINOP -> /
 FACTOR -> CONST
 FACTOR -> id FACTORID'
-FACTOR -> ( EXPR )
+FACTOR -> ( EXPR^ )
 FACTORID' -> EPSILON
-FACTORID' -> [ EXPR ]
+FACTORID' -> [ EXPR^ ]
 FACTORID' -> ( EXPRS )
 CONST -> true
 CONST -> false
@@ -85,7 +85,7 @@ CONST -> floatlit
 
 
 ==========
-Remove left recursion from EXPR, TERM, AEXPR and CLAUSE
+Remove left recursion from EXPR, TERM, AEXPR, and CLAUSE
 Left factored IDS, NEPARAMS, STMT, NEEXPRS, PRED, and FACTOR
 
 In this grammar I have replaced the "|" operator with "~" because hackingoff.com reserves | to be alternation for grammar productions
