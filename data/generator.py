@@ -5,7 +5,7 @@ JSON_FILE = 'grammar.json'
 
 def generate_grammar():
     count = 1
-    seen = { "EPSILON": ""}
+    seen = {}
     non_terminals = [""]
     productions = [""]
     with open(GRAMMAR_FILE) as f:
@@ -29,7 +29,7 @@ def generate_grammar():
         for e in prod:
             if e in seen:
                 out.append(seen[e])
-            else:
+            elif e != "EPSILON":
                 out.append(e)
         final_productions.append(out)
 
