@@ -22,7 +22,7 @@ impl<'a> fmt::Display for Token<'a> {
     }
 }
 
-pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, &'static str> {
+pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, VecDeque<Token>> {
     lazy_static! {
         static ref KEYWORD1_RE: Regex = Regex::new(r"^((array)|(begin)|(boolean)|(break)|(do)|(else)|(end)|(enddo)|(endif)|(false)|(float)|(for)|(func)|(if)|(in)|(int)|(let)|(of)|(return)|(then)|(to)|(true)|(type)|(unit)|(var)|(while))$").unwrap();
         static ref KEYWORD2_RE: Regex = Regex::new(r"^(,|:|;|\(|\)|\[|\]|\{|\}|\.|\+|-|\*|/|=|<|>|<>|<=|>=|&|\||:=)$").unwrap();
@@ -45,15 +45,13 @@ pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, &'static str> {
         if buffer[end - 1..end].eq(" ") {
 
             if pre_match_found < 0 {
-                // print_tokens(&q, &token);
-                return Err("Syntax error 1");
+                return Err(result);
             }
 
 
             if need_keyword2 && pre_match_found != 4 {
                 result.pop_back();
-                // print_tokens(&q, &token);
-                return Err("Syntax error 2");
+                return Err(result);
             }
 
             if need_keyword2 && pre_match_found == 4 {
@@ -83,8 +81,7 @@ pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, &'static str> {
         if match_found == -1 && pre_match_found != -1 {
             if need_keyword2 && pre_match_found != 4 {
                 result.pop_back();
-                // print_tokens(&q, &token);
-                return Err("Syntax error 3");
+                return Err(result);
             }
 
             if need_keyword2 && pre_match_found == 4 {
@@ -115,8 +112,7 @@ pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, &'static str> {
     if pre_match_found != -1 {
         if need_keyword2 && pre_match_found != 4 {
             result.pop_back();
-            // print_tokens(&q, &token);
-            return Err("Syntax error 5");
+            return Err(result);
         }
 
         let token = Token {
@@ -134,11 +130,6 @@ pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, &'static str> {
 pub fn print_tokens(queue: &VecDeque<Token>) {
     let mut output: String = String::new();
     for token in queue {
-        // if token.token_name == "keyword" {
-        //     write!(&mut output, "{} ", &token.val).unwrap();
-        // } else {
-        //     write!(&mut output, "{}:{} ", &token.val, &token.token_name).unwrap();
-        // }
         write!(&mut output, "{} ", &token).unwrap();
     }
     output = output.trim().to_string();
