@@ -67,6 +67,7 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
     let mut terminal_map: HashMap<&str, usize>= HashMap::new();
     for (i, terminal) in table.terminals.iter().enumerate() {
         terminal_map.insert(terminal, i);
+        println!("{}:{}", &terminal, &i);
     }
 
     let mut token = tokens.pop_front();
@@ -101,9 +102,25 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
                 return Err(err);
             }
         } else {
-            let production_no: usize = *table.table.get(non_terminal).unwrap().get(*terminal_map.get(token_val.val).unwrap()).unwrap();
+            let terminal_ndx: usize = match terminal_map.get(token_val.val) {
+                Some(expr) => *expr,
+                None => *terminal_map.get(token_val.token_name).unwrap(),
+            };
+            // println!("DEBUG TOKEN: {}", token_val);
+            let row: &Vec<usize> = table.table.get(non_terminal).expect("Could not get table row");
+            println!("------------------");
+            println!("row: {:?}", row);
+            println!("Token: {}:{}", token_val.val, terminal_ndx);
+            let production_no: usize = *row.get(terminal_ndx).expect("Could not get production number");
             let production = grammar.productions.get(production_no).unwrap();
-            // println!("{} - {} - {:?}", &non_terminal, &production_no, &production);
+            println!("{}:{} - {}:{} - {}:{}",
+                &grammar.nonterminals.get(non_terminal).unwrap(),
+                &non_terminal,
+                &terminal_ndx,
+                table.terminals.get(terminal_ndx).unwrap(),
+                &production_no,
+                &debug_production(&production, &grammar.nonterminals));
+            println!("------------------");
             stack.pop_front();
             for rule in production.iter().rev() {
                 stack.push_front(rule.to_string());
@@ -112,6 +129,25 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
     }
 
     Ok(())
+}
+
+// pub fn debug_table(table: &ParseTable, grammar: &Grammar) {
+//     for row in table.table
+// }
+pub fn debug_production(production: &Vec<String>, nonterminals: &Vec<String>) -> String {
+    let mut output = String::new();
+    for r in production {
+        let non_terminal: usize = match r.parse::<usize>() {
+            Ok(num) => num,
+            Err(_e) => 0
+        };
+        if non_terminal != 0 {
+            write!(output, "{} ", nonterminals.get(non_terminal).unwrap());
+        } else {
+            write!(output, "{} ", r);
+        }
+    }
+    output
 }
 
 pub fn print_stack(stack: &VecDeque<String>, nonterminals: &Vec<String>) {
