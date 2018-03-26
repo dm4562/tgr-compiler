@@ -13,9 +13,9 @@ mod parser;
 use clap::{Arg, App};
 use regex::Regex;
 use std::io::Read;
+use std::fmt::Write;
 use std::fs::File;
 use std::process;
-
 
 fn read_file(file_name: String) -> String {
     let comment = Regex::new(r"/\*(([^\*/])*)\*/").unwrap();
@@ -68,33 +68,47 @@ fn main() {
         scanner::print_tokens(&tokens);
     }
 
-    if matches.is_present("ast") {
-        let table = match parser::load_parse_table() {
-            Ok(t) => t,
-            Err(e) => {
-                eprintln!("{}", e);
-                process::exit(1);
-            }
-        };
+    // Step 2: run the parser to generate a proper syntax tree
+    let table = match parser::load_parse_table() {
+        Ok(t) => t,
+        Err(e) => { eprintln!("{}", e); process::exit(1); }
+    };
 
-        let grammar = match parser::load_grammar() {
-            Ok(t) => t,
-            Err(e) => {
-                eprintln!("{}", e);
-                process::exit(1);
-            }
-        };
-        debug!("{}", table);
-        debug!("{}", grammar);
+    let grammar = match parser::load_grammar() {
+        Ok(t) => t,
+        Err(e) => { eprintln!("{}", e); process::exit(1); }
+    };
+    debug!("{}", table);
+    debug!("{}", grammar);
 
-        match parser::parse_input(&grammar, &table, &mut tokens) {
-            Ok(_res) => {
-                info!("Successfully parsed the program");
-            },
-            Err(msg) => {
-                eprintln!("Parse error: {}", msg);
-                process::exit(1);
+    match parser::parse_input(&grammar, &table, &mut tokens) {
+        Ok(ast) => {
+            info!("Successfully parsed the program");
+            if matches.is_present("ast") {
+                println!("{}", format_ast(&ast));
             }
-        };
+        },
+        Err(msg) => { eprintln!("Parse error: {}", msg); process::exit(1); }
+    };
+}
+
+fn format_ast(ast: &Vec<String>) -> String {
+    let mut output = String::new();
+    let mut print_space = false;
+
+    for symbol in ast {
+        if print_space && !symbol.eq("@)") {
+            write!(output, " ").unwrap();
+        }
+
+        print_space = !symbol.eq("@(");
+
+        if symbol.starts_with("@") {
+            write!(output, "{}", &symbol[1..]).unwrap();
+        } else {
+            write!(output, "{}", symbol).unwrap();
+        }
     }
+
+    return output;
 }

@@ -63,7 +63,7 @@ pub fn load_grammar() -> Result<Grammar, &'static str> {
     Ok(grammar)
 }
 
-pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<Token>) -> Result<(), String> {
+pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<Token>) -> Result<Vec<String>, String> {
     // Build the reverse map for terminals
     let mut terminal_map: HashMap<&str, usize>= HashMap::new();
     for (i, terminal) in table.terminals.iter().enumerate() {
@@ -73,27 +73,36 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
 
     let mut token = tokens.pop_front();
     let mut stack: VecDeque<String> = VecDeque::new();
+    let mut ast: Vec<String> = Vec::new();
     stack.push_front("1".to_string());
-    // let mut top = stack.front().unwrap();
 
     loop {
         if stack.is_empty() && token.is_none() {
             break;
+        } else if stack.is_empty() {
+            return Err("unexpected values after end of program.".to_owned());
+        } else if stack.front().unwrap().eq("@#") {
+            // Found special token denoting the upwards traversal in the AST
+            // Mark the end of an expanded non-terminal
+            ast.push("@)".to_owned());
+            stack.pop_front();
+            continue;
         }
-
-        let token_val = token.expect("Couldn't unwrap token");
-
-        print_debug_stack(&stack, &grammar.nonterminals);
-        debug!("{}\n", token_val);
 
         let non_terminal: usize = match stack.front().unwrap().parse::<usize>() {
             Ok(num) => num,
             Err(_e) => 0
         };
 
+        let token_val = token.expect("Couldn't unwrap token");
+
+        print_debug_stack(&stack, &grammar.nonterminals);
+        debug!("{}\n", token_val);
+
         if non_terminal == 0 {
             if (token_val.token_name.eq("keyword") && token_val.val.eq(stack.front().unwrap())) || token_val.token_name.eq(stack.front().unwrap()) {
                 // success
+                ast.push(get_token_ast_value(&token_val));
                 stack.pop_front();
                 token = tokens.pop_front();
             } else {
@@ -108,9 +117,11 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
                 None => *terminal_map.get(token_val.token_name).unwrap(),
             };
             let row: &Vec<usize> = table.table.get(non_terminal).expect("Could not get table row");
+
             debug!("------------------");
             debug!("row: {:?}", row);
             debug!("Token: {}:{}", token_val.val, terminal_ndx);
+
             let production_no: usize = *row.get(terminal_ndx).expect("Could not get production number");
             let production = match grammar.productions.get(production_no) {
                 Some(v) => v,
@@ -119,7 +130,9 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
                     write!(&mut err, "unexpected token '{}' found!", token_val.val).unwrap();
                     return Err(err);
                 }
-            };            debug!("{}:{} - {}:{} - {}:{}",
+            };
+
+            debug!("{}:{} - {}:{} - {}:{}",
                 &grammar.nonterminals.get(non_terminal).unwrap(),
                 &non_terminal,
                 &terminal_ndx,
@@ -127,20 +140,40 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
                 &production_no,
                 &debug_production(&production, &grammar.nonterminals));
             debug!("------------------");
+
+
             stack.pop_front();
-            for rule in production.iter().rev() {
-                stack.push_front(rule.to_string());
+
+            if !production.is_empty() {
+                // Push a special token to mark where the newly expanded production will end
+                stack.push_front("@#".to_owned());
+                
+                // Mark the end of an expanded non-terminal
+                ast.push("@(".to_owned());
+
+                // Push the expanded productions onto the stack (in reverse order)
+                for rule in production.iter().rev() {
+                    stack.push_front(rule.to_owned());
+                }
             }
+
+            // Push the expanded non-terminal onto the AST
+            ast.push(grammar.nonterminals.get(non_terminal).unwrap().to_lowercase());
         }
     }
 
-    Ok(())
+    Ok(ast)
 }
 
-// pub fn debug_table(table: &ParseTable, grammar: &Grammar) {
-//     for row in table.table
-// }
-pub fn debug_production(production: &Vec<String>, nonterminals: &Vec<String>) -> String {
+fn get_token_ast_value(token: &Token) -> String {
+    match token.token_name {
+        "keyword"   => token.val.to_owned(),
+        "id"        => token.val.to_owned(),
+        _           => token.token_name.to_owned(),
+    }
+}
+
+fn debug_production(production: &Vec<String>, nonterminals: &Vec<String>) -> String {
     let mut output = String::new();
     for r in production {
         let non_terminal: usize = match r.parse::<usize>() {
@@ -156,7 +189,7 @@ pub fn debug_production(production: &Vec<String>, nonterminals: &Vec<String>) ->
     output
 }
 
-pub fn print_debug_stack(stack: &VecDeque<String>, nonterminals: &Vec<String>) {
+fn print_debug_stack(stack: &VecDeque<String>, nonterminals: &Vec<String>) {
     if !log_enabled!(Level::Debug) {
         return;
     }
