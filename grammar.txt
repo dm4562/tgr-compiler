@@ -113,10 +113,9 @@ STMTSP -> EPSILON
 STMTSP -> STMTS
 FULLSTMT -> STMT ;
 STMT -> LVALUE := EXPR
-STMT -> if EXPR then STMTS STMTIFP
-STMT -> if EXPR then STMTS STMTIFP
-STMTIFP -> else STMTS endif
-STMTPIFP -> endif
+STMT -> if EXPR then STMTS STMTSPP
+STMTSPP -> endif
+STMTSPP -> else STMTS endif
 STMT -> while EXPR do STMTS enddo
 STMT -> for id := EXPR to EXPR do STMTS enddo
 STMT -> break
