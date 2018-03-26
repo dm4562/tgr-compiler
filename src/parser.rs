@@ -62,7 +62,7 @@ pub fn load_grammar() -> Result<Grammar, &'static str> {
     Ok(grammar)
 }
 
-pub fn parse_input(_grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<Token>) -> Result<(), &'static str> {
+pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<Token>) -> Result<(), String> {
     // Build the reverse map for terminals
     let mut terminal_map: HashMap<&str, usize>= HashMap::new();
     for (i, terminal) in table.terminals.iter().enumerate() {
@@ -79,12 +79,15 @@ pub fn parse_input(_grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque
             break;
         }
 
+        let token_val = token.expect("Couldn't unwrap token");
+
+        print_stack(&stack, &grammar.nonterminals);
+        println!("{}\n", token_val);
+
         let non_terminal: usize = match stack.front().unwrap().parse::<usize>() {
             Ok(num) => num,
             Err(_e) => 0
         };
-
-        let token_val = token.expect("Couldn't unwrap token");
 
         if non_terminal == 0 {
             if (token_val.token_name.eq("keyword") && token_val.val.eq(stack.front().unwrap())) || token_val.token_name.eq(stack.front().unwrap()) {
@@ -95,15 +98,34 @@ pub fn parse_input(_grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque
                 // error
                 let mut err = String::new();
                 write!(&mut err, "Looking for {}", &stack.front().unwrap()).unwrap();
-                return Err("Looking for stack.front().unwrap()");
+                return Err(err);
             }
         } else {
             let production_no: usize = *table.table.get(non_terminal).unwrap().get(*terminal_map.get(token_val.val).unwrap()).unwrap();
-            println!("{} - {}", &non_terminal, &production_no);
-
+            let production = grammar.productions.get(production_no).unwrap();
+            // println!("{} - {} - {:?}", &non_terminal, &production_no, &production);
+            stack.pop_front();
+            for rule in production.iter().rev() {
+                stack.push_front(rule.to_string());
+            }
         }
     }
 
     Ok(())
+}
 
+pub fn print_stack(stack: &VecDeque<String>, nonterminals: &Vec<String>) {
+    for e in stack {
+        let non_terminal: usize = match e.parse::<usize>() {
+            Ok(num) => num,
+            Err(_e) => 0
+        };
+        if non_terminal != 0 {
+            print!("{}-", nonterminals.get(non_terminal).unwrap());
+        } else {
+            print!("{}-", e);
+        }
+    }
+    print!("$\n");
+    // print!("\n");
 }

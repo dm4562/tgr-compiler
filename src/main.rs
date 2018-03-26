@@ -85,6 +85,13 @@ fn main() {
         println!("{}", table);
         println!("{}", grammar);
 
-        parser::parse_input(&grammar, &table, &mut tokens);
+        match parser::parse_input(&grammar, &table, &mut tokens) {
+            Ok(_res) => {
+                println!("Successfully parsed the program");
+            },
+            Err(msg) => {
+                println!("Parse error: {}", msg);
+            }
+        };
     }
 }
