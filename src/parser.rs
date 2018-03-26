@@ -169,6 +169,8 @@ fn get_token_ast_value(token: &Token) -> String {
     match token.token_name {
         "keyword"   => token.val.to_owned(),
         "id"        => token.val.to_owned(),
+        "intlit"    => token.val.to_owned(),
+        "floatlit"  => token.val.to_owned(),
         _           => token.token_name.to_owned(),
     }
 }
