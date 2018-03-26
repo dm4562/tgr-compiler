@@ -44,7 +44,7 @@ Alternatively,
 $ make
 ```
 
-## Running Project 1
+## Running Project Submissions
 
 The compiled binaries are located in the *target* folder, and `cargo` offers a convenient, single command way to compile and run the code. Due to how `cargo` handles the build process the directory `p1` could not be created.
 
@@ -57,5 +57,19 @@ $ cargo run --release -- everything.tgr --tokens
 For the grade script, `compiler` handles this command, as an example to print out tokens of `everything.tgr` execute the following:
 
 ```
-./compiler $f --tokens > ${f%.tgr}.tokens
+$ ./compiler program.tgr --tokens > program.tokens
+```
+
+**Before running the scripts make sur to create a `tests` directory with the appropriate tests required to run the grading script.**
+
+### Running Project 1 Tests
+
+```
+$ ./p1_grade.sh
+```
+
+### Running Project 2 Tests
+
+```
+$ ./p2_grade.sh
 ```
