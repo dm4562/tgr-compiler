@@ -80,7 +80,7 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
 
         let token_val = match token {
             Some(val) => val,
-            None      => return Err("Syntax error".to_owned())
+            None      => return Err("syntax error".to_owned())
         };
 
         print_debug_stack(&stack, &grammar.nonterminals);
