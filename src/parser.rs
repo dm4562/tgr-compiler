@@ -1,12 +1,3 @@
-/*
- * Build a map from int <-> NT (based on the indexing provided in the parse table)
- * Build a map for all the productions int -> [list] where each NT is a number based on the
- * above map.
- * Each element in the list is a tuple where first index is the type (NT, keyword, id, intlit...)
- * and second element is the value
- * Then use this setup to build the parser
- */
-
 extern crate serde;
 extern crate serde_json;
 
@@ -26,10 +17,6 @@ pub struct ParseTable {
 
 impl fmt::Display for ParseTable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Write strictly the first element into the supplied output
-        // stream: `f`. Returns `fmt::Result` which indicates whether the
-        // operation succeeded or failed. Note that `write!` uses syntax which
-        // is very similar to `println!`.
         write!(f, "Parse Table\nTerminals: {} - Table: {} x {}", self.terminals.len(), self.table.len(), self.table[0].len())
     }
 }
@@ -42,10 +29,6 @@ pub struct Grammar {
 
 impl fmt::Display for Grammar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Write strictly the first element into the supplied output
-        // stream: `f`. Returns `fmt::Result` which indicates whether the
-        // operation succeeded or failed. Note that `write!` uses syntax which
-        // is very similar to `println!`.
         write!(f, "Grammar\nNon-Terminals: {} - Productions: {}", self.nonterminals.len(), self.productions.len())
     }
 }
@@ -95,7 +78,10 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
             Err(_e) => 0
         };
 
-        let token_val = token.expect("Couldn't unwrap token");
+        let token_val = match token {
+            Some(val) => val,
+            None      => return Err("syntax error".to_owned())
+        };
 
         print_debug_stack(&stack, &grammar.nonterminals);
         debug!("{}\n", token_val);
@@ -166,12 +152,12 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
                         ast.push("@)".to_owned());
                     }
                 }
-                
+
                 if !prod_name.ends_with("'") {
                     if !production.is_empty() {
                         // Push a special token to mark where the newly expanded production will end
                         stack.push_front("@#".to_owned());
-                        
+
                         // Mark the end of an expanded non-terminal
                         ast.push("@(".to_owned());
                     }
@@ -184,7 +170,7 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
             for rule in production.iter().rev() {
                 stack.push_front(rule.to_owned());
             }
-            
+
         }
     }
 

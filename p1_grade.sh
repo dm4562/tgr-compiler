@@ -5,7 +5,7 @@ let runs=0
 let passed=0
 let failed=0
 
-echo "Generating tokenss for tests"
+echo "Generating tokens for tests"
 for f in $FILES
 do
   let runs++

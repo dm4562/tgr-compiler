@@ -59,8 +59,8 @@ fn main() {
     let mut tokens = match scanner::parse_tokens(&buffer) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("{}", e);
-            process::exit(1);
+            eprintln!("Parse error");
+            e
         },
     };
 
