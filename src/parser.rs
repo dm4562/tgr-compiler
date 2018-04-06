@@ -90,7 +90,7 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
             } else {
                 // error
                 let mut err = String::new();
-                write!(&mut err, "looking for {}", get_readable_production_name(&stack.front().unwrap())).unwrap();
+                write!(&mut err, "unexpected token '{}' found!", token_val.val).unwrap();
                 return Err(err);
             }
         } else {
