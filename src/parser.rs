@@ -2,7 +2,6 @@ extern crate serde;
 extern crate serde_json;
 
 use log::Level;
-use std::fs::File;
 use std::collections::{VecDeque, HashMap};
 use std::fmt;
 use std::fmt::Write;
@@ -34,16 +33,12 @@ impl fmt::Display for Grammar {
 }
 
 
-pub fn load_parse_table() -> Result<ParseTable, &'static str> {
-    let table_file = File::open("data/parsing_table.json").expect("Unable to open json file");
-    let table: ParseTable = serde_json::from_reader(table_file).expect("Could not read json file");
-    Ok(table)
+pub fn load_parse_table() -> Result<ParseTable, serde_json::Error> {
+    serde_json::from_str(include_str!("../data/parsing_table.json"))
 }
 
-pub fn load_grammar() -> Result<Grammar, &'static str> {
-    let file = File::open("data/grammar.json").expect("Unable to open json file");
-    let grammar: Grammar = serde_json::from_reader(file).expect("Could not read json file");
-    Ok(grammar)
+pub fn load_grammar() -> Result<Grammar, serde_json::Error> {
+    serde_json::from_str(include_str!("../data/grammar.json"))
 }
 
 pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<Token>) -> Result<Vec<String>, String> {
@@ -227,4 +222,26 @@ fn print_debug_stack(stack: &VecDeque<String>, nonterminals: &Vec<String>) {
     write!(output, "$").unwrap();
 
     debug!("{}", output);
+}
+
+/// Formats the internally represented abstract syntax tree into a human-friendly `String`.
+pub fn format_ast(ast: &Vec<String>) -> String {
+    let mut output = String::new();
+    let mut print_space = false;
+
+    for symbol in ast {
+        if print_space && !symbol.eq("@)") {
+            write!(output, " ").unwrap();
+        }
+
+        print_space = !symbol.eq("@(");
+
+        if symbol.starts_with("@") {
+            write!(output, "{}", &symbol[1..]).unwrap();
+        } else {
+            write!(output, "{}", symbol).unwrap();
+        }
+    }
+
+    return output;
 }

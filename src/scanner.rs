@@ -127,11 +127,17 @@ pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, VecDeque<Token>>
     Ok(result)
 }
 
-pub fn print_tokens(queue: &VecDeque<Token>) {
+/// Formats tokens into a human-friendly, space-delimited `String` list.
+pub fn format_tokens(queue: &VecDeque<Token>) -> String {
     let mut output: String = String::new();
-    for token in queue {
-        write!(&mut output, "{} ", &token).unwrap();
+    let mut iter = queue.iter();
+    if let Some(token) = iter.next() {
+        write!(&mut output, "{}", token).unwrap();
+
+        for token in iter {
+            write!(&mut output, " {}", token).unwrap();        
+        }
     }
-    output = output.trim().to_string();
-    print!("{}", &output);
+    
+    output
 }

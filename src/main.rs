@@ -13,11 +13,10 @@ mod parser;
 use clap::{Arg, App};
 use regex::Regex;
 use std::io::Read;
-use std::fmt::Write;
 use std::fs::File;
 use std::process;
 
-fn read_file(file_name: String) -> String {
+fn read_file(file_name: &str) -> String {
     let comment = Regex::new(r"/\*(([^\*/])*)\*/").unwrap();
     let white_space = Regex::new(r"\s+").unwrap();
     let mut buffer = String::new();
@@ -48,67 +47,59 @@ fn main() {
             .help("Print out the Abstract Syntax Tree"))
         .get_matches();
 
+    // Initialize logger
     env_logger::init();
 
-    let should_print_tokens = matches.is_present("tokens");
-    let file_name = matches.value_of("file").unwrap().to_string();
-
-    let buffer = read_file(file_name);
+    // Read source file
+    let buffer = read_file(matches.value_of("file").unwrap());
 
     // Step 1: run the scanner to parse the tokens
     let mut tokens = match scanner::parse_tokens(&buffer) {
-        Ok(v) => v,
+        Ok(v) => {
+            if matches.is_present("tokens") {
+                println!("{}", scanner::format_tokens(&v));
+            }
+            v
+        },
         Err(e) => {
-            eprintln!("Parse error");
-            e
+            {
+                let last_token = match e.back() {
+                    Some(s) => s.to_string(),
+                    None    => "N/A".to_owned(),
+                };
+                eprintln!("An error during lexical analysis occurred! Last valid token: {}", last_token);
+            }
+            if matches.is_present("tokens") {
+                println!("{}", scanner::format_tokens(&e));
+            }
+            process::exit(1);
         },
     };
 
-    if should_print_tokens {
-        scanner::print_tokens(&tokens);
-    }
 
     // Step 2: run the parser to generate a proper syntax tree
+    // Load parse table into memory
     let table = match parser::load_parse_table() {
         Ok(t) => t,
         Err(e) => { eprintln!("{}", e); process::exit(1); }
     };
+    debug!("{}", table);
 
+    // Load grammar into memory
     let grammar = match parser::load_grammar() {
         Ok(t) => t,
         Err(e) => { eprintln!("{}", e); process::exit(1); }
     };
-    debug!("{}", table);
     debug!("{}", grammar);
 
+    // Run the parser
     match parser::parse_input(&grammar, &table, &mut tokens) {
         Ok(ast) => {
             info!("Successfully parsed the program");
             if matches.is_present("ast") {
-                println!("{}", format_ast(&ast));
+                println!("{}", parser::format_ast(&ast));
             }
         },
         Err(msg) => { eprintln!("Parse error: {}", msg); process::exit(1); }
     };
-}
-
-fn format_ast(ast: &Vec<String>) -> String {
-    let mut output = String::new();
-    let mut print_space = false;
-
-    for symbol in ast {
-        if print_space && !symbol.eq("@)") {
-            write!(output, " ").unwrap();
-        }
-
-        print_space = !symbol.eq("@(");
-
-        if symbol.starts_with("@") {
-            write!(output, "{}", &symbol[1..]).unwrap();
-        } else {
-            write!(output, "{}", symbol).unwrap();
-        }
-    }
-
-    return output;
 }
