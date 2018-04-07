@@ -60,7 +60,7 @@ def generate_parse_table():
 
     grammar = json.load(open(GRAMMR_JSON_FILE))
 
-    for prod in grammar['productions']:
+    for prod in grammar['productions'][1:]:
         for p in prod:
             try:
                 nt = int(p)
@@ -139,7 +139,7 @@ def generate_follow_sets():
     first = generate_first_sets()
     grammar = json.load(open(GRAMMR_JSON_FILE))
     follow = {}
-    for nt in grammar['nonterminals']:
+    for nt in grammar['nonterminals'][1:]:
         follow[nt] = set()
 
     follow['PROGRAM'].add('$')
@@ -148,7 +148,7 @@ def generate_follow_sets():
     while pre != follow:
         pre = copy.deepcopy(follow)
 
-        for r, prod in zip(grammar['rules'], grammar['productions']):
+        for r, prod in zip(grammar['rules'][1:], grammar['productions'][1:]):
             trailer = follow[r].copy()
             j = len(prod) - 1
             while j >= 0:
@@ -178,6 +178,9 @@ def generate_first_sets():
     grammar = json.load(open(GRAMMR_JSON_FILE))
     first = {}
     for i, prod in enumerate(grammar['productions']):
+        if i == 0:
+            continue
+
         if not prod:
             prod.append(EPSILON)
 
@@ -206,7 +209,7 @@ def generate_first_sets():
     while pre != first:
         pre = copy.deepcopy(first)
         count += 1
-        for r, prod in zip(grammar['rules'], grammar['productions']):
+        for r, prod in zip(grammar['rules'][1:], grammar['productions'][1:]):
             p0 = get_prod(prod, 0)
             rhs = first[p0].copy() - set([EPSILON])
 
