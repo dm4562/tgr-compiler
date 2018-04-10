@@ -9,6 +9,7 @@ extern crate serde_derive;
 
 mod scanner;
 mod parser;
+mod typechecker;
 
 use clap::{Arg, App};
 use regex::Regex;
