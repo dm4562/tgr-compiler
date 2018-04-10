@@ -135,9 +135,9 @@ pub fn format_tokens(queue: &VecDeque<Token>) -> String {
         write!(&mut output, "{}", token).unwrap();
 
         for token in iter {
-            write!(&mut output, " {}", token).unwrap();        
+            write!(&mut output, " {}", token).unwrap();
         }
     }
-    
+
     output
 }

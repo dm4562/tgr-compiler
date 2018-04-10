@@ -41,7 +41,7 @@ pub fn load_grammar() -> Result<Grammar, serde_json::Error> {
     serde_json::from_str(include_str!("../data/grammar.json"))
 }
 
-pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<Token>) -> Result<Vec<String>, String> {
+pub fn parse_input<'a>(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<Token<'a>>) -> Result<(Vec<String>, Vec<Token<'a>>), String> {
     // Build the reverse map for terminals
     let mut terminal_map: HashMap<&str, usize>= HashMap::new();
     for (i, terminal) in table.terminals.iter().enumerate() {
@@ -52,6 +52,7 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
     let mut token = tokens.pop_front();
     let mut stack: VecDeque<String> = VecDeque::new();
     let mut ast: Vec<String> = Vec::new();
+    let mut new_ast: Vec<Token<'a>> = Vec::new();
     let mut recurse_idx_stack: Vec<usize> = Vec::new();
     stack.push_front("1".to_string());
 
@@ -64,6 +65,7 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
             // Found special token denoting the upwards traversal in the AST
             // Mark the end of an expanded non-terminal
             ast.push("@)".to_owned());
+            new_ast.push(Token {val: "@)", token_name: "helper", index: 0, length: 0, token_type: 0});
             stack.pop_front();
             continue;
         }
@@ -85,6 +87,7 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
             if (token_val.token_name.eq("keyword") && token_val.val.eq(stack.front().unwrap())) || token_val.token_name.eq(stack.front().unwrap()) {
                 // success
                 ast.push(get_token_ast_value(&token_val));
+                new_ast.push(token_val);
                 stack.pop_front();
                 token = tokens.pop_front();
             } else {
@@ -140,11 +143,21 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
 
                         // Insert at the recurse index to reintroduce left recursion
                         ast.insert(*recurse_idx, "@(".to_owned());
+                        new_ast.insert(*recurse_idx, Token { val: "@(", token_name: "helper", index: 0, length: 0, token_type: 0});
                         ast.insert(*recurse_idx + 1, get_readable_production_name(prod_name));
+                        let temp = get_readable_production_name(prod_name).as_str();
+                        new_ast.insert(*recurse_idx + 1, Token {
+                            val: temp,
+                            token_name: "nonterminal",
+                            index: 0,
+                            length: 0,
+                            token_type: 0
+                        });
                         *recurse_idx += 2;
 
                         // Close the left recursive call inserted above
                         ast.push("@)".to_owned());
+                        new_ast.push(Token {val: "@(", token_name: "helper", index: 0, length: 0, token_type: 0});
                     }
                 }
 
@@ -155,9 +168,17 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
 
                         // Mark the end of an expanded non-terminal
                         ast.push("@(".to_owned());
+                        new_ast.push(Token {val: "@(", token_name: "helper", index: 0, length: 0, token_type: 0});
                     }
 
                     ast.push(get_readable_production_name(prod_name));
+                    new_ast.push(Token {
+                        val: &get_readable_production_name(prod_name),
+                        token_name: "nonterminal",
+                        index: 0,
+                        length: 0,
+                        token_type: 0
+                    });
                 }
             }
 
@@ -169,7 +190,7 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
         }
     }
 
-    Ok(ast)
+    Ok((ast, new_ast))
 }
 
 fn get_token_ast_value(token: &Token) -> String {
@@ -183,7 +204,7 @@ fn get_token_ast_value(token: &Token) -> String {
 }
 
 fn get_readable_production_name(name: &str) -> String {
-    name.to_lowercase().replace("^", "").replace("'", "")
+    name.to_lowercase().replace("^", "").replace("'", "").to_owned()
 }
 
 fn debug_production(production: &Vec<String>, nonterminals: &Vec<String>) -> String {
