@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt;
+use indextree::{Arena, NodeId};
 
 use scanner::Token;
 
 #[derive(Debug)]
-struct SymbolTable {
+pub struct SymbolTable {
     map: HashMap<String, VecDeque<Type>>
 }
 
@@ -58,4 +59,71 @@ enum Type {
     Boolean
 }
 
+pub fn build_type_maps(ast: &Vec<String>) -> (SymbolTable, SymbolTable) {
+    let atable = SymbolTable {
+        map: HashMap::new()
+    };
 
+    let ttable = SymbolTable {
+        map: HashMap::new()
+    };
+
+    let (arena, root) = build_ast(&ast);
+    debug_print_ast(&arena, root);
+
+    let mut queue = VecDeque::new();
+    queue.push_back(root);
+    while let Some(node) = queue.pop_front() {
+        if arena[node].data.eq("declseg") {
+            break;
+        }
+
+        for child in node.children(&arena) {
+            queue.push_back(child);
+        }
+    }
+
+    (atable, ttable)
+}
+
+pub fn build_ast(ast: &Vec<String>) -> (Arena<String>, NodeId) {
+    let mut arena: Arena<String> = Arena::new();
+    let mut ast_iter = ast.into_iter();
+    // ast_iter.next();
+
+    // let root = arena.new_node(ast_iter.next().unwrap().to_string());
+    let mut root = arena.new_node(String::from("-"));
+    let mut curr = root;
+
+    while let Some(node) = ast_iter.next() {
+        if node.eq("@(") {
+            let val = ast_iter.next().unwrap().to_string();
+            let nid: NodeId = arena.new_node(val);
+            curr.append(nid, &mut arena);
+            curr = nid;
+        } else if node.eq("@)") {
+            curr = curr.ancestors(&arena).next().unwrap();
+        } else {
+            let nid = arena.new_node(node.to_string());
+            curr.append(nid, &mut arena);
+        }
+    }
+    root = root.children(&arena).next().unwrap();
+    (arena, root)
+}
+
+pub fn debug_print_ast(arena: &Arena<String>, root: NodeId) {
+    let mut v = VecDeque::new();
+    v.push_back(root);
+    print!("\n");
+    let mut curr;
+    while !v.is_empty() {
+        curr = v.pop_front().unwrap();
+        print!("{}-", arena[curr].data);
+        for mut child in curr.children(&arena) {
+            // print!("{} ", arena[child].data);
+            v.push_back(child);
+        };
+        // print!("\n");
+    }
+}
