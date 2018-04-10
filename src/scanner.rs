@@ -1,23 +1,46 @@
 use regex::Regex;
+use std::rc::{Rc};
 use std::collections::VecDeque;
 use std::fmt::Write;
 use std::fmt;
 
-#[derive(Debug, Clone, Copy)]
-pub struct Token<'a> {
-    pub val: &'a str,
-    pub token_name: &'a str,
+#[derive(Debug, Clone)]
+pub struct Token {
+    pub val: Rc<String>,
+    pub token_name: &'static str,
     pub index: usize,
     pub length: usize,
     pub token_type: usize
 }
 
-impl<'a> fmt::Display for Token<'a> {
+impl<'a> fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.token_name == "keyword" {
             write!(f, "{}", self.val)
         } else {
             write!(f, "{}:{}", self.val, self.token_name)
+        }
+    }
+}
+
+impl Token {
+    pub fn new(val: Rc<String>, token_name: &'static str, index: usize, length: usize, token_type: usize) -> Token {
+        Token {
+            val: val,
+            token_name: token_name,
+            index: index,
+            length: length,
+            token_type: token_type,
+        }
+    }
+
+    pub fn get_blank() -> Token {
+        Token {
+            val: Rc::new("".to_owned()),
+            token_name: "",
+            index: 0,
+            length: 0,
+            token_type: 0,
         }
     }
 }
@@ -59,7 +82,7 @@ pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, VecDeque<Token>>
             }
 
             let token = Token {
-                val: &buffer[start..end - 1],
+                val: Rc::new(buffer[start..end - 1].to_owned()),
                 token_name: TOKEN_NAMES[pre_match_found as usize],
                 index: start, length: end - 1 - start,
                 token_type: pre_match_found as usize
@@ -89,7 +112,7 @@ pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, VecDeque<Token>>
             }
 
             let token = Token {
-                val: &buffer[start..end - 1],
+                val: Rc::new(buffer[start..end - 1].to_owned()),
                 token_name: TOKEN_NAMES[pre_match_found as usize],
                 index: start, length: end - 1 - start,
                 token_type: pre_match_found as usize
@@ -116,7 +139,7 @@ pub fn parse_tokens(buffer: &String) -> Result<VecDeque<Token>, VecDeque<Token>>
         }
 
         let token = Token {
-            val: &buffer[start..end - 1],
+            val: Rc::new(buffer[start..end - 1].to_owned()),
             token_name: TOKEN_NAMES[pre_match_found as usize],
             index: start, length: end - 1 - start,
             token_type: pre_match_found as usize
