@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
 use indextree::{Arena, NodeId};
+use indexmap::IndexMap;
 
 use scanner::Token;
 
@@ -44,7 +45,30 @@ impl fmt::Display for SymbolTable {
 
 #[derive(Debug)]
 pub struct FunctionTable {
-    map: HashMap<Rc<String>, HashMap<Rc<String>, DynamicType>>
+    map: HashMap<Rc<String>, IndexMap<Rc<String>, DynamicType>>
+}
+
+impl FunctionTable {
+    fn match_args(&self, id: &String, args_list: &Vec<DynamicType>) -> bool {
+        let argmap = match self.map.get(id) {
+            Some(map)   => map,
+            None        => return false
+        };
+
+        let mut vi = args_list.iter();
+        for (param, param_type) in argmap.iter() {
+            let a_type  = match vi.next() {
+                Some(t) => t,
+                None    => return false
+            };
+
+            if param_type != a_type {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 impl fmt::Display for FunctionTable {
@@ -213,7 +237,6 @@ fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<S
         iter = iter.next().expect("Expected TYPEDECLS").children(arena);
     }
 
-    // print!("{}", atable);
     Ok(atable)
 }
 
@@ -235,7 +258,7 @@ fn build_func_context_map(funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atab
         let mut params_iter = func_node.children(arena).nth(3).unwrap().children(arena);
 
         // Create entry in FunctionTable for id
-        ftable.map.insert(id.val.clone(), HashMap::new());
+        ftable.map.insert(id.val.clone(), IndexMap::new());
         let args_map = ftable.map.get_mut(&(*id.val)).unwrap();
 
         // Insert param types
@@ -345,14 +368,14 @@ fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
     Err("unimplemented".to_owned())
 }
 
-fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, String> {
+fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let mut curr_term_node = term_node;
     let mut term_child_iter = curr_term_node.children(arena);
 
     let mut pre_factor_type: Option<DynamicType> = None;
     while let Some(factor_node) = term_child_iter.nth(2) {
         // get the type of factor node
-        let factor_type: DynamicType = evaluate_factor(factor_node, arena, ctable)?;
+        let factor_type: DynamicType = evaluate_factor(factor_node, arena, ctable, ftable)?;
         pre_factor_type = match pre_factor_type {
             Some(pre_type)  => {
                 if pre_type.cur_type == BaseType::Float {
@@ -371,7 +394,7 @@ fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTab
     }
 
     let final_factor_node = term_node.children(arena).next().unwrap();
-    let final_factor_type = evaluate_factor(final_factor_node, arena, ctable)?;
+    let final_factor_type = evaluate_factor(final_factor_node, arena, ctable, ftable)?;
     pre_factor_type = match pre_factor_type {
         Some(pre_type)  => {
             if pre_type.cur_type == BaseType::Float {
@@ -386,7 +409,7 @@ fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTab
     Ok(pre_factor_type.unwrap())
 }
 
-fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, String> {
+fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let factor_child: NodeId = factor_node.children(arena).next().unwrap();
 
     // Check if factor is a constant literal
@@ -399,7 +422,8 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
     let ret_type: Result<DynamicType, String>;
     if (*arena[factor_child].data).token_name.eq("identifier") {
         // If factor starts with an identifier
-        let id_type: DynamicType = match ctable.find(&*(arena[factor_child].data).val) {
+        let id = (*arena[factor_child].data).val.clone();
+        let id_type: DynamicType = match ctable.find(&id) {
             Some(t) => t.clone(),
             None    => return Err("Type mismatch error".to_owned())
         };
@@ -422,7 +446,14 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
             "(" => {
                 // TODO: check function type and return function return value
                 let arglist = evaluate_exprs(e_node, arena, ctable)?;
-                return Err("".to_owned());
+                if !ftable.match_args(&id, &arglist) {
+                    return Err("Type mismatch error!".to_owned());
+                } else {
+                    match ctable.find(&id) {
+                        Some(t) => Ok(t.clone()),
+                        None    => Err("Type not found".to_owned())
+                    }
+                }
             },
             _   => return Err("Unexpected bracket".to_owned())
         };
