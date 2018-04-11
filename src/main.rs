@@ -4,11 +4,12 @@ extern crate env_logger;
 #[macro_use] extern crate log;
 extern crate regex;
 
-#[macro_use]
-extern crate serde_derive;
+#[macro_use] extern crate serde_derive;
+extern crate indextree;
 
 mod scanner;
 mod parser;
+mod typechecker;
 
 use clap::{Arg, App};
 use regex::Regex;
@@ -93,13 +94,16 @@ fn main() {
     debug!("{}", grammar);
 
     // Run the parser
-    match parser::parse_input(&grammar, &table, &mut tokens) {
-        Ok(ast) => {
+    let (mut ast, mut new_ast) = match parser::parse_input(&grammar, &table, &mut tokens) {
+        Ok((ast, nast)) => {
             info!("Successfully parsed the program");
             if matches.is_present("ast") {
                 println!("{}", parser::format_ast(&ast));
             }
+            (ast, nast)
         },
         Err(msg) => { eprintln!("Parse error: {}", msg); process::exit(1); }
     };
+
+    typechecker::build_type_maps(&new_ast);
 }

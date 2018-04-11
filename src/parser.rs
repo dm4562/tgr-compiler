@@ -2,6 +2,7 @@ extern crate serde;
 extern crate serde_json;
 
 use log::Level;
+use std::rc::Rc;
 use std::collections::{VecDeque, HashMap};
 use std::fmt;
 use std::fmt::Write;
@@ -41,7 +42,7 @@ pub fn load_grammar() -> Result<Grammar, serde_json::Error> {
     serde_json::from_str(include_str!("../data/grammar.json"))
 }
 
-pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<Token>) -> Result<Vec<String>, String> {
+pub fn parse_input<'a>(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<Token>) -> Result<(Vec<String>, Vec<Rc<Token>>), String> {
     // Build the reverse map for terminals
     let mut terminal_map: HashMap<&str, usize>= HashMap::new();
     for (i, terminal) in table.terminals.iter().enumerate() {
@@ -49,67 +50,72 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
         debug!("{}:{}", &terminal, &i);
     }
 
-    let mut token = tokens.pop_front();
+    let mut next_token_opt = tokens.pop_front();
+    let mut cur_token: Rc<Token>;
     let mut stack: VecDeque<String> = VecDeque::new();
     let mut ast: Vec<String> = Vec::new();
+    let mut new_ast: Vec<Rc<Token>> = Vec::new();
     let mut recurse_idx_stack: Vec<usize> = Vec::new();
-    stack.push_front("1".to_string());
+    stack.push_front("1".to_owned());
 
     loop {
-        if stack.is_empty() && token.is_none() {
+        if stack.is_empty() && next_token_opt.is_none() {
             break;
         } else if stack.is_empty() {
-            return Err("unexpected values after end of program.".to_owned());
+            return Err(format!("unexpected token '{}' after end of program.", next_token_opt.unwrap()).to_owned());
         } else if stack.front().unwrap().eq("@#") {
             // Found special token denoting the upwards traversal in the AST
             // Mark the end of an expanded non-terminal
             ast.push("@)".to_owned());
+            new_ast.push(Rc::new(Token::new(Rc::new("@)".to_owned()), "helper", 0, 0, 0)));
             stack.pop_front();
             continue;
         }
+
+        cur_token = match next_token_opt.clone() {
+            Some(v) => Rc::new(v),
+            None    => return Err("unexpected end of program!".to_owned()),
+        };
 
         let non_terminal: usize = match stack.front().unwrap().parse::<usize>() {
             Ok(num) => num,
             Err(_e) => 0
         };
 
-        let token_val = match token {
-            Some(val) => val,
-            None      => return Err("syntax error".to_owned())
-        };
-
         print_debug_stack(&stack, &grammar.nonterminals);
-        debug!("{}\n", token_val);
+        debug!("{}\n", cur_token);
 
         if non_terminal == 0 {
-            if (token_val.token_name.eq("keyword") && token_val.val.eq(stack.front().unwrap())) || token_val.token_name.eq(stack.front().unwrap()) {
+            if (cur_token.token_name.eq("keyword") && (*cur_token.val).eq(stack.front().unwrap())) || cur_token.token_name.eq(stack.front().unwrap()) {
                 // success
-                ast.push(get_token_ast_value(&token_val));
+                ast.push(get_token_ast_value(&cur_token));
+                new_ast.push(cur_token.clone());
                 stack.pop_front();
-                token = tokens.pop_front();
+                next_token_opt = tokens.pop_front();
             } else {
                 // error
                 let mut err = String::new();
-                write!(&mut err, "unexpected token '{}' found!", token_val.val).unwrap();
+                println!("{:?}", stack.front().unwrap());
+                write!(&mut err, "unexpected token '{}' found!", cur_token.val).unwrap();
                 return Err(err);
             }
         } else {
-            let terminal_ndx: usize = match terminal_map.get(token_val.val) {
+            let terminal_ndx: usize = match terminal_map.get(&(*cur_token.val)[..]) {
                 Some(expr) => *expr,
-                None => *terminal_map.get(token_val.token_name).unwrap(),
+                None => *terminal_map.get(cur_token.token_name).unwrap(),
             };
             let row: &Vec<usize> = table.table.get(non_terminal).expect("Could not get table row");
 
             debug!("------------------");
             debug!("row: {:?}", row);
-            debug!("Token: {}:{}", token_val.val, terminal_ndx);
+            debug!("Token: {}:{}", cur_token.val, terminal_ndx);
 
             let production_no: usize = *row.get(terminal_ndx).expect("Could not get production number");
             let production = match grammar.productions.get(production_no) {
                 Some(v) => v,
                 None    => {
                     let mut err = String::new();
-                    write!(&mut err, "unexpected token '{}' found!", token_val.val).unwrap();
+                    write!(&mut err, "unexpected token '{}' found!", *cur_token.val).unwrap();
                     return Err(err);
                 }
             };
@@ -140,11 +146,21 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
 
                         // Insert at the recurse index to reintroduce left recursion
                         ast.insert(*recurse_idx, "@(".to_owned());
+                        new_ast.insert(*recurse_idx, Rc::new(Token::new(Rc::new("@(".to_owned()), "helper", 0, 0, 0)));
                         ast.insert(*recurse_idx + 1, get_readable_production_name(prod_name));
+                        new_ast.insert(*recurse_idx + 1, Rc::new(Token::new(
+                            Rc::new(get_readable_production_name(prod_name)),
+                            "nonterminal",
+                            0,
+                            0,
+                            0
+                        )));
+                        // This may need to change
                         *recurse_idx += 2;
 
                         // Close the left recursive call inserted above
                         ast.push("@)".to_owned());
+                        new_ast.push(Rc::new(Token::new(Rc::new("@)".to_owned()), "helper", 0, 0, 0)));
                     }
                 }
 
@@ -155,9 +171,17 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
 
                         // Mark the end of an expanded non-terminal
                         ast.push("@(".to_owned());
+                        new_ast.push(Rc::new(Token::new(Rc::new("@(".to_owned()), "helper", 0, 0, 0)))
                     }
 
                     ast.push(get_readable_production_name(prod_name));
+                    new_ast.push(Rc::new(Token::new(
+                        Rc::new(get_readable_production_name(prod_name)),
+                        "nonterminal",
+                        0,
+                        0,
+                        0
+                    )));
                 }
             }
 
@@ -169,21 +193,21 @@ pub fn parse_input(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDeque<
         }
     }
 
-    Ok(ast)
+    Ok((ast, new_ast))
 }
 
 fn get_token_ast_value(token: &Token) -> String {
     match token.token_name {
-        "keyword"   => token.val.to_owned(),
-        "id"        => token.val.to_owned(),
-        "intlit"    => token.val.to_owned(),
-        "floatlit"  => token.val.to_owned(),
+        "keyword"   => (*token.val).to_owned(),
+        "id"        => (*token.val).to_owned(),
+        "intlit"    => (*token.val).to_owned(),
+        "floatlit"  => (*token.val).to_owned(),
         _           => token.token_name.to_owned(),
     }
 }
 
 fn get_readable_production_name(name: &str) -> String {
-    name.to_lowercase().replace("^", "").replace("'", "")
+    name.to_lowercase().replace("^", "").replace("'", "").to_owned()
 }
 
 fn debug_production(production: &Vec<String>, nonterminals: &Vec<String>) -> String {
