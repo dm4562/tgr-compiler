@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
@@ -8,37 +9,26 @@ use scanner::Token;
 
 #[derive(Debug)]
 pub struct SymbolTable {
-    map: HashMap<String, VecDeque<DynamicType>>
+    map: HashMap<String, DynamicType>
 }
 
 impl SymbolTable {
-    fn push(&mut self, id: &String, sym_type: DynamicType) -> bool {
-        self.map.entry(id.to_owned()).or_insert(VecDeque::new());
-        let q: &mut VecDeque<DynamicType> = match self.map.get_mut(id) {
-            Some(v) => v,
-            None => {
-                return false;
-            }
+    fn push(&mut self, id: &String, sym_type: DynamicType) -> Result<(), String> {
+        // self.map.entry(id.to_owned()).or_insert(VecDeque::new());
+        match self.map.entry(id.to_owned()) {
+            Entry::Vacant(v)      => v.insert(sym_type),
+            Entry::Occupied(_)    => return Err(format!("'{}' is defined multiple times in the same lexical scope!", id)),
         };
-
-        q.push_back(sym_type);
-        true
+        
+        Ok(())
     }
 
     fn pop(&mut self, id: &String) -> Option<DynamicType> {
-        let v: &mut VecDeque<DynamicType> = self.map.get_mut(id).unwrap();
-        v.pop_back()
+        self.map.remove(id)
     }
 
     fn find(&self, id: &String) -> Option<&DynamicType> {
-        let v: &VecDeque<DynamicType> = match self.map.get(id) {
-            Some(vec) => vec,
-            None => {
-                return None;
-            }
-        };
-
-        v.back()
+        self.map.get(id)
     }
 }
 
@@ -219,7 +209,7 @@ fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<S
         n = typedecl_node.children(arena).nth(3).expect("Could not extract TYPE");
         let ret_type = DynamicType::from_tree_node(n, arena, &atable)?;
 
-        atable.push(&(*id).val, ret_type);
+        atable.push(&(*id).val, ret_type)?;
         iter = iter.next().expect("Expected TYPEDECLS").children(arena);
     }
 
@@ -268,7 +258,7 @@ fn build_func_context_map(funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atab
         }
 
         // Insert return type
-        ctable.push(&(*id).val, ret_type);
+        ctable.push(&(*id).val, ret_type)?;
         iter = iter.next().unwrap().children(arena);
     }
 
@@ -289,7 +279,7 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
         let mut ids_iter = vardecl_node.children(arena).nth(1).unwrap().children(arena);
         while let Some(nt_ids) = ids_iter.next() {
             let id = arena[nt_ids].data.clone();
-            ctable.push(&(*id).val, var_type.clone());
+            ctable.push(&(*id).val, var_type.clone())?;
 
             ids_iter = match ids_iter.nth(1) {
                 Some(i) => i.children(&arena),
@@ -317,6 +307,10 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
 
     // print!("{}", ctable);
     Ok(ctable)
+}
+
+fn check_return_paths(funcdecl_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) {
+
 }
 
 fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, String> {
