@@ -287,6 +287,68 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
     Ok(ctable)
 }
 
+fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<DynamicType, &'static str> {
+    let mut expr_child_iterator = expr_node.children(arena);
+    while let Some(clause_node) = expr_child_iterator.nth(2) {
+        // Evaluate clause node
+
+
+        // Iteratively expand expr
+        // Unwrap should never fail here
+        expr_child_iterator = expr_node.children(arena).next().unwrap().children(arena);
+    }
+
+    // Evaluate the last clause node
+
+    Err("unimplemented")
+}
+
+fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<DynamicType, &'static str> {
+    let mut clause_child_iter = clause_node.children(arena);
+    while let Some(pred_node) = clause_child_iter.nth(2) {
+
+        // Iteratively expand clause
+        // Unwrap should never fail here
+        clause_child_iter = clause_node.children(arena).next().unwrap().children(arena);
+    }
+
+    Err("unimplemented")
+}
+
+fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<DynamicType, &'static str> {
+    let mut term_child_iter = term_node.children(arena);
+
+    while let Some(factor_node) = term_child_iter.nth(2) {
+        let factor_child = factor_node.children(arena).next().unwrap();
+
+        // Check if factor is a constant literal
+        let mut factor_type = DynamicType::from_const_token(&*(arena[factor_child].data));
+        match factor_type {
+            Some(t) => return Ok(t),
+            None    => {}
+        };
+
+        // Iteratively expand term
+        // Unwrap should never fail here
+        term_child_iter = term_node.children(arena).next().unwrap().children(arena);
+    }
+
+    Err("unimplemented")
+}
+
+fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<DynamicType, &'static str> {
+    let factor_child = factor_node.children(arena).next().unwrap();
+
+    // Check if factor is a constant literal
+    let mut factor_type = DynamicType::from_const_token(&*(arena[factor_child].data));
+    match factor_type {
+        Some(t) => return Ok(t),
+        None    => {}
+    };
+
+     Err("unimplemented")
+}
+
 pub fn build_ast(ast: &Vec<Rc<Token>>) -> (Arena<Rc<Token>>, NodeId) {
     let mut arena: Arena<Rc<Token>> = Arena::new();
     let mut ast_iter = ast.into_iter();
