@@ -160,7 +160,7 @@ pub fn parse_input<'a>(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDe
 
                         // Close the left recursive call inserted above
                         ast.push("@)".to_owned());
-                        new_ast.push(Rc::new(Token::new(Rc::new("@(".to_owned()), "helper", 0, 0, 0)));
+                        new_ast.push(Rc::new(Token::new(Rc::new("@)".to_owned()), "helper", 0, 0, 0)));
                     }
                 }
 

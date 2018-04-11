@@ -181,17 +181,37 @@ fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> SymbolTa
         iter = iter.next().expect("Expected TYPEDECLS").children(&arena);
     }
 
+    print!("{}", atable);
     atable
 }
 
 fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Arena<Rc<Token>>) -> SymbolTable {
-    let ttable = SymbolTable {
+    let mut ttable = SymbolTable {
         map: HashMap::new()
     };
 
     let mut iter = vardecls_node.children(&arena);
+    while let Some(child) = iter.next() {
+        // Implement logic to parse out vardecl
 
+        let mut ndx = child.children(&arena).nth(3).expect("Could not extract TYPE");
+        let var_type = DynamicType::from_tree_node(ndx, &arena, &ttable);
 
+        let mut ids_iter = child.children(&arena).nth(1).unwrap().children(&arena);
+        while let Some(nt_ids) = ids_iter.next() {
+            let id = arena[nt_ids].data.clone();
+            ttable.push(&(*id).val, var_type.clone().unwrap());
+
+            ids_iter = match ids_iter.nth(1) {
+                Some(i) => i.children(&arena),
+                None    => break
+            }
+        }
+
+        iter = iter.next().expect("Expected VARDECLS").children(&arena);
+    }
+
+    print!("{}", ttable);
     ttable
 }
 
