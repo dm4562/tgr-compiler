@@ -128,7 +128,6 @@ impl DynamicType {
 
 pub fn build_type_maps(ast: &Vec<Rc<Token>>) -> (SymbolTable, SymbolTable) {
     let (arena, root) = build_ast(&ast);
-    debug_print_ast(&arena, root);
 
     let mut queue = VecDeque::new();
     queue.push_back(root);
@@ -160,8 +159,8 @@ pub fn build_type_maps(ast: &Vec<Rc<Token>>) -> (SymbolTable, SymbolTable) {
     }
 
     let atable = build_alias_map(typedecls_node.unwrap(), &arena);
-    let ttable = build_context_map(vardecls_node.unwrap(), funcdecls_node.unwrap(), &arena);
-    (atable, ttable)
+    let ctable = build_context_map(vardecls_node.unwrap(), funcdecls_node.unwrap(), &arena, &atable);
+    (atable, ctable)
 }
 
 fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> SymbolTable {
@@ -169,38 +168,38 @@ fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> SymbolTa
         map: HashMap::new()
     };
 
-    let mut iter = typedecls_node.children(&arena);
-    while let Some(child) = iter.next() {
-        let mut n = child.children(&arena).nth(1).expect("Could not extract identifier");
+    let mut iter = typedecls_node.children(arena);
+    while let Some(typedecl_node) = iter.next() {
+        let mut n = typedecl_node.children(arena).nth(1).expect("Could not extract identifier");
         let id = arena[n].data.clone();
-        n = child.children(&arena).nth(3).expect("Could not extract TYPE");
-        let nt_type = arena[n].data.clone();
-        let ret_type = DynamicType::from_tree_node(n, &arena, &atable);
-        // TODO throw type-checking error if ret_type is None
+        n = typedecl_node.children(arena).nth(3).expect("Could not extract TYPE");
+        let ret_type = DynamicType::from_tree_node(n, arena, &atable);
+        // TODO: throw type-checking error if ret_type is None
+        // Should never encounter ^^ case coz would be parse error
         atable.push(&(*id).val, ret_type.unwrap());
-        iter = iter.next().expect("Expected TYPEDECLS").children(&arena);
+        iter = iter.next().expect("Expected TYPEDECLS").children(arena);
     }
 
-    print!("{}", atable);
+    // print!("{}", atable);
     atable
 }
 
-fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Arena<Rc<Token>>) -> SymbolTable {
-    let mut ttable = SymbolTable {
+fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atable: &SymbolTable) -> SymbolTable {
+    let mut ctable = SymbolTable {
         map: HashMap::new()
     };
 
-    let mut iter = vardecls_node.children(&arena);
+    let mut iter = vardecls_node.children(arena);
     while let Some(child) = iter.next() {
         // Implement logic to parse out vardecl
 
-        let mut ndx = child.children(&arena).nth(3).expect("Could not extract TYPE");
-        let var_type = DynamicType::from_tree_node(ndx, &arena, &ttable);
+        let mut ndx = child.children(arena).nth(3).expect("Could not extract TYPE");
+        let var_type = DynamicType::from_tree_node(ndx, arena, atable);
 
-        let mut ids_iter = child.children(&arena).nth(1).unwrap().children(&arena);
+        let mut ids_iter = child.children(arena).nth(1).unwrap().children(arena);
         while let Some(nt_ids) = ids_iter.next() {
             let id = arena[nt_ids].data.clone();
-            ttable.push(&(*id).val, var_type.clone().unwrap());
+            ctable.push(&(*id).val, var_type.clone().unwrap());
 
             ids_iter = match ids_iter.nth(1) {
                 Some(i) => i.children(&arena),
@@ -208,11 +207,43 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
             }
         }
 
-        iter = iter.next().expect("Expected VARDECLS").children(&arena);
+        iter = iter.next().expect("Expected VARDECLS").children(arena);
     }
 
-    print!("{}", ttable);
-    ttable
+    iter = funcdecls_node.children(&arena);
+    while let Some(func_node) = iter.next() {
+        // Extract function return type
+        let type_node = func_node.children(arena).nth(6).unwrap();
+        let ret_type = DynamicType::from_tree_node(type_node, arena, atable);
+
+        // Extract function identifier
+        let id_ndx = func_node.children(arena).nth(1).unwrap();
+        let id = arena[id_ndx].data.clone();
+
+        let mut params_iter = func_node.children(arena).nth(3).unwrap().children(arena);
+
+        // Insert param types
+        if let Some(neparams_node) = params_iter.next() {
+            let mut neparams_iter = neparams_node.children(arena);
+            while let Some(param_node) = neparams_iter.next() {
+                let param_type_node = param_node.children(arena).nth(2).unwrap();
+                let param_type = DynamicType::from_tree_node(param_type_node, arena, atable);
+                ctable.push(&(*id).val, param_type.clone().unwrap());
+
+                neparams_iter = match neparams_iter.next() {
+                    Some(node)  => node.children(arena),
+                    None        => break
+                };
+            }
+        }
+
+        // Insert return type
+        ctable.push(&(*id).val, ret_type.clone().unwrap());
+        iter = iter.next().unwrap().children(arena);
+    }
+
+    // print!("{}", ctable);
+    ctable
 }
 
 pub fn build_ast(ast: &Vec<Rc<Token>>) -> (Arena<Rc<Token>>, NodeId) {
