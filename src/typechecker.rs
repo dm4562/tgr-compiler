@@ -280,6 +280,8 @@ fn build_func_context_map(funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atab
             }
         }
 
+        check_return_paths(func_node.children(arena).nth(8).unwrap(), arena, ctable, &ret_type, &id.val)?;
+
         // Insert return type
         ctable.push(&(*id).val, ret_type)?;
         iter = iter.next().unwrap().children(arena);
@@ -332,8 +334,37 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
     Ok(ctable)
 }
 
-fn check_return_paths(funcdecl_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) {
 
+/// Checks that all possible executable paths in a function return and return the correct type.
+fn check_return_paths(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ret_type: &DynamicType, name: &String) -> Result<Option<DynamicType>, String> {
+    let mut cur_return: Option<DynamicType> = None;
+
+    for child_node in stmts_node.children(arena) {
+        match arena[child_node].data.val.as_str() {
+            "if"    => {
+                check_return_paths(child_node.children(arena).nth(3).unwrap(), arena, ctable, ret_type, name)?;
+                // If both 'if' and 'else' parts have a return type, then the whole block has a return value as well
+                match child_node.children(arena).nth(5) {
+                    Some(v) => {
+                        if let Some(ret_type) = check_return_paths(child_node.children(arena).nth(3).unwrap(), arena, ctable, ret_type, name)? {
+                            cur_return = Some(ret_type);
+                        }
+                    },
+                    None    => {},
+                    }
+            }
+            "return"    => {
+                let new_ret_type = evaluate_expr(child_node.children(arena).nth(3).unwrap(), arena, ctable)?;
+                cur_return = match new_ret_type == *ret_type {
+                    true    => Some(new_ret_type),
+                    false   => return Err(format!("the type of a return path of '{}' does not match its definition!", name)),
+                };
+            },
+            _       => {},
+        }
+    };
+
+    cur_return.map_or(Err(format!("does not return a value on all code paths!")), |ret| Ok(Some(ret)))
 }
 
 fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, String> {
