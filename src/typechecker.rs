@@ -77,10 +77,10 @@ impl BaseType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct DynamicType {
     cur_type: BaseType,
-    sub_type: Rc<Option<Box<DynamicType>>>
+    sub_type: Option<Rc<Box<DynamicType>>>
 }
 
 impl PartialEq for DynamicType {
@@ -89,13 +89,12 @@ impl PartialEq for DynamicType {
             return false;
         }
 
+
+        // Need to clone `DynamicType` since comparator needs references to the boxed sub_type
+        let mine = self.clone();
+        let other = other.clone();
         // Recursively checks if sub_type is equal
-        // if let (Some(lhs), Some(rhs)) = (self.sub_type, other.sub_type) {
-        //     return lhs == rhs;
-        // } else {
-        //     return self.sub_type.is_none() && other.sub_type.is_none();
-        // }
-        self.sub_type.map_or(other.sub_type.is_none(), |lhs| other.sub_type.map_or(false, |rhs| *lhs == *rhs))
+        mine.sub_type.map_or(other.sub_type.is_none(), |lhs| other.sub_type.map_or(false, |rhs| *lhs == *rhs))
     }
 }
 
@@ -109,8 +108,8 @@ impl DynamicType {
         DynamicType {
             cur_type: cur_type,
             sub_type: match cur_type.is_recursive_type() {
-                true    => Rc::new(Some(Box::new(DynamicType::from_tree_node(node.children(arena).last().unwrap(), arena)))),
-                false   => Rc::new(None),
+                true    => Some(Rc::new(Box::new(DynamicType::from_tree_node(node.children(arena).last().unwrap(), arena)))),
+                false   => None,
             }
         }
     }
