@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt;
+use std::rc::Rc;
 use indextree::{Arena, NodeId};
 use std::rc::Rc;
 
@@ -53,11 +54,61 @@ impl fmt::Display for SymbolTable {
     }
 }
 
-#[derive(Debug)]
-enum Type {
+#[derive(Debug, PartialEq)]
+enum BaseType {
     Integer,
     Float,
-    Boolean
+    Boolean,
+    Array
+}
+
+impl BaseType {
+    fn from_str(s: &str) -> BaseType {
+        match s {
+            "int"       => BaseType::Integer,
+            "float"     => BaseType::Float,
+            "boolean"   => BaseType::Boolean,
+            "array"     => BaseType::Array,
+            _           => panic!("invalid type reached the typechecker!"),
+        }
+    }
+
+    fn is_recursive_type(&self) -> bool {
+        *self == BaseType::Array
+    }
+}
+
+struct DynamicType {
+    cur_type: BaseType,
+    sub_type: Option<Box<DynamicType>>
+}
+
+impl PartialEq for DynamicType {
+    fn eq(&self, other: &DynamicType) -> bool {
+        if self.cur_type != other.cur_type {
+            return false;
+        }
+
+        // Recursively checks if sub_type is equal
+        self.sub_type.map_or(other.sub_type.is_none(), |lhs| other.sub_type.map_or(false, |rhs| *lhs == *rhs))
+    }
+}
+
+impl DynamicType {
+    /// Converts a TYPE subtree into a recursive `DynamicType` representation.
+    /// 
+    /// `node` should be a `NodeId` pointing to a TYPE node in an `Arena`.
+    fn from_tree_node(node: NodeId, arena: &Arena<Rc<Token>>) -> DynamicType {
+        // The base type can be detected from the first token in a type declaration
+        let cur_type = BaseType::from_str(&*(arena[node.children(arena).nth(0).unwrap()].data.val));
+        DynamicType {
+            cur_type: cur_type,
+            sub_type: match cur_type.is_recursive_type() {
+                true    => Some(Box::new(DynamicType::from_tree_node(node.children(arena).last().unwrap(), arena))),
+                false   => None,
+            }
+        }
+    }
 }
 
 pub fn build_type_maps(ast: &Vec<Rc<Token>>) -> (SymbolTable, SymbolTable) {
