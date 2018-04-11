@@ -117,7 +117,7 @@ impl DynamicType {
 
 pub fn build_type_maps(ast: &Vec<Rc<Token>>) -> (SymbolTable, SymbolTable) {
     let (arena, root) = build_ast(&ast);
-    // debug_print_ast(&arena, root);
+    debug_print_ast(&arena, root);
 
     let mut queue = VecDeque::new();
     queue.push_back(root);
@@ -193,15 +193,12 @@ pub fn build_ast(ast: &Vec<Rc<Token>>) -> (Arena<Rc<Token>>, NodeId) {
     while let Some(node) = ast_iter.next() {
         if (*node.val).eq("@(") {
             let rc_token = ast_iter.next().unwrap();
-            print!("\n-{}-\n ", rc_token);
             let nid: NodeId = arena.new_node(rc_token.clone());
             curr.append(nid, &mut arena);
             curr = nid;
         } else if (*node.val).eq("@)") {
-            curr = curr.ancestors(&arena).next().unwrap();
-            print!("\n^{}^\n", arena[curr].data);
+            curr = curr.ancestors(&arena).nth(1).unwrap();
         } else {
-            print!("{}* ", node);
             let nid = arena.new_node(node.clone());
             curr.append(nid, &mut arena);
         }
@@ -212,15 +209,16 @@ pub fn build_ast(ast: &Vec<Rc<Token>>) -> (Arena<Rc<Token>>, NodeId) {
 
 pub fn debug_print_ast(arena: &Arena<Rc<Token>>, root: NodeId) {
     let mut v = VecDeque::new();
-    v.push_back(root);
+    let mut i = 1;
+    v.push_back((root, 1));
     print!("\n");
-    let mut curr;
+    let mut curr: Rc<Token>;
     while !v.is_empty() {
-        curr = v.pop_front().unwrap();
+        let (curr, i) = v.pop_front().unwrap();
         // print!("{}-", arena[curr].data);
         for mut child in curr.children(&arena) {
-            print!("{} ", arena[child].data);
-            v.push_back(child);
+            print!("{}:{} ", arena[child].data, i);
+            v.push_back((child, i + 1));
         };
         print!("\n");
     }
