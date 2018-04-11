@@ -105,5 +105,5 @@ fn main() {
         Err(msg) => { eprintln!("Parse error: {}", msg); process::exit(1); }
     };
 
-    // typechecker::build_type_alias_map(&ast);
+    typechecker::build_type_maps(&new_ast);
 }
