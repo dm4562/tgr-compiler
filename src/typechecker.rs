@@ -20,7 +20,7 @@ impl SymbolTable {
             Entry::Vacant(v)      => v.insert(sym_type),
             Entry::Occupied(_)    => return Err(format!("'{}' is defined multiple times in the same lexical scope!", id)),
         };
-        
+
         Ok(())
     }
 
@@ -425,7 +425,7 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
         let id = (*arena[factor_child].data).val.clone();
         let id_type: DynamicType = match ctable.find(&id) {
             Some(t) => t.clone(),
-            None    => return Err("Type mismatch error".to_owned())
+            None    => return Err("Type mismatch error: Type not found".to_owned())
         };
 
         let bracket_node = match factor_child.following_siblings(arena).next() {
@@ -435,27 +435,31 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
 
         let e_node = match bracket_node.following_siblings(arena).next() {
             Some(node)  => node,
-            None        => return Err("Expected expression".to_owned())
+            None        => return Err("expression not found".to_owned())
         };
 
         ret_type = match &*arena[bracket_node].data.val.as_str() {
             "[" => {
                 // TODO: return the array type
-                evaluate_expr(e_node, arena, ctable)
-            },
-            "(" => {
-                // TODO: check function type and return function return value
-                let arglist = evaluate_exprs(e_node, arena, ctable)?;
-                if !ftable.match_args(&id, &arglist) {
-                    return Err("Type mismatch error!".to_owned());
+                let e_type = evaluate_expr(e_node, arena, ctable)?;
+                if e_type.cur_type != BaseType::Integer {
+                    Err("Type mismatch error: Can only index with Integer".to_owned())
                 } else {
-                    match ctable.find(&id) {
-                        Some(t) => Ok(t.clone()),
-                        None    => Err("Type not found".to_owned())
+                    match e_type.sub_type {
+                        Some(rc_type)   => Ok((**rc_type).clone()),
+                        None            => Err("Type mismatch error".to_owned())
                     }
                 }
             },
-            _   => return Err("Unexpected bracket".to_owned())
+            "(" => {
+                let arglist = evaluate_exprs(e_node, arena, ctable)?;
+                if !ftable.match_args(&id, &arglist) {
+                    Err("Type mismatch error!".to_owned())
+                } else {
+                    Ok(id_type)
+                }
+            },
+            _   => Err("Unexpected bracket".to_owned())
         };
     } else {
         let e_node = match factor_child.following_siblings(arena).next() {
