@@ -185,7 +185,7 @@ fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> SymbolTa
 }
 
 fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atable: &SymbolTable) -> SymbolTable {
-    let mut ttable = SymbolTable {
+    let mut ctable = SymbolTable {
         map: HashMap::new()
     };
 
@@ -228,7 +228,7 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
             while let Some(param_node) = neparams_iter.next() {
                 let param_type_node = param_node.children(arena).nth(2).unwrap();
                 let param_type = DynamicType::from_tree_node(param_type_node, arena, atable);
-                ttable.push(&(*id).val, param_type.clone().unwrap());
+                ctable.push(&(*id).val, param_type.clone().unwrap());
 
                 neparams_iter = match neparams_iter.next() {
                     Some(node)  => node.children(arena),
@@ -238,12 +238,12 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
         }
 
         // Insert return type
-        ttable.push(&(*id).val, ret_type.clone().unwrap());
+        ctable.push(&(*id).val, ret_type.clone().unwrap());
         iter = iter.next().unwrap().children(arena);
     }
 
-    // print!("{}", ttable);
-    ttable
+    // print!("{}", ctable);
+    ctable
 }
 
 pub fn build_ast(ast: &Vec<Rc<Token>>) -> (Arena<Rc<Token>>, NodeId) {
