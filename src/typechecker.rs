@@ -154,18 +154,19 @@ pub fn build_type_maps(ast: &Vec<Rc<Token>>) -> (SymbolTable, SymbolTable) {
 }
 
 fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> SymbolTable {
-    let atable = SymbolTable {
+    let mut atable = SymbolTable {
         map: HashMap::new()
     };
 
     let mut iter = typedecls_node.children(&arena);
     while let Some(child) = iter.next() {
-        // call chris_func
-        // (*arena[node].data)
-        print!("-{}-", arena[child].data);
-        for n in child.children(&arena) {
-            print!("{} ", arena[n].data);
-        }
+        let mut n = child.children(&arena).nth(1).expect("Could not extract identifier");
+        let id = arena[n].data.clone();
+        n = child.children(&arena).nth(3).expect("Could not extract TYPE");
+        let nt_type = arena[n].data.clone();
+        let ret_type = DynamicType::from_tree_node(n, &arena);
+
+        atable.push(&(*id).val, ret_type);
         iter = iter.next().expect("Expected TYPEDECLS").children(&arena);
     }
 
