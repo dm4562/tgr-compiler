@@ -93,11 +93,7 @@ pub fn parse_input<'a>(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDe
                 stack.pop_front();
                 next_token_opt = tokens.pop_front();
             } else {
-                // error
-                let mut err = String::new();
-                println!("{:?}", stack.front().unwrap());
-                write!(&mut err, "unexpected token '{}' found!", cur_token.val).unwrap();
-                return Err(err);
+                return Err(format!("unexpected token '{}' found!", cur_token.val));
             }
         } else {
             let terminal_ndx: usize = match terminal_map.get(&(*cur_token.val)[..]) {
@@ -113,11 +109,7 @@ pub fn parse_input<'a>(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDe
             let production_no: usize = *row.get(terminal_ndx).expect("Could not get production number");
             let production = match grammar.productions.get(production_no) {
                 Some(v) => v,
-                None    => {
-                    let mut err = String::new();
-                    write!(&mut err, "unexpected token '{}' found!", *cur_token.val).unwrap();
-                    return Err(err);
-                }
+                None    => return Err(format!("unexpected token '{}' found!", *cur_token.val)),
             };
 
             debug!("{}:{} - {}:{} - {}:{}",
