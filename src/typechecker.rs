@@ -3,19 +3,18 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::rc::Rc;
 use indextree::{Arena, NodeId};
-use std::rc::Rc;
 
 use scanner::Token;
 
 #[derive(Debug)]
 pub struct SymbolTable {
-    map: HashMap<String, VecDeque<Type>>
+    map: HashMap<String, VecDeque<DynamicType>>
 }
 
 impl SymbolTable {
-    fn push(&mut self, id: &String, sym_type: Type) -> bool {
+    fn push(&mut self, id: &String, sym_type: DynamicType) -> bool {
         self.map.entry(id.to_owned()).or_insert(VecDeque::new());
-        let q: &mut VecDeque<Type> = match self.map.get_mut(id) {
+        let q: &mut VecDeque<DynamicType> = match self.map.get_mut(id) {
             Some(v) => v,
             None => {
                 return false;
@@ -26,13 +25,13 @@ impl SymbolTable {
         true
     }
 
-    fn pop(&mut self, id: &String) -> Option<Type> {
-        let v: &mut VecDeque<Type> = self.map.get_mut(id).unwrap();
+    fn pop(&mut self, id: &String) -> Option<DynamicType> {
+        let v: &mut VecDeque<DynamicType> = self.map.get_mut(id).unwrap();
         v.pop_back()
     }
 
-    fn find(&self, id: &String) -> Option<&Type> {
-        let v: &VecDeque<Type> = match self.map.get(id) {
+    fn find(&self, id: &String) -> Option<&DynamicType> {
+        let v: &VecDeque<DynamicType> = match self.map.get(id) {
             Some(vec) => vec,
             None => {
                 return None;
@@ -54,7 +53,7 @@ impl fmt::Display for SymbolTable {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum BaseType {
     Integer,
     Float,
@@ -78,9 +77,10 @@ impl BaseType {
     }
 }
 
+#[derive(Debug)]
 struct DynamicType {
     cur_type: BaseType,
-    sub_type: Option<Box<DynamicType>>
+    sub_type: Rc<Option<Box<DynamicType>>>
 }
 
 impl PartialEq for DynamicType {
@@ -90,13 +90,18 @@ impl PartialEq for DynamicType {
         }
 
         // Recursively checks if sub_type is equal
+        // if let (Some(lhs), Some(rhs)) = (self.sub_type, other.sub_type) {
+        //     return lhs == rhs;
+        // } else {
+        //     return self.sub_type.is_none() && other.sub_type.is_none();
+        // }
         self.sub_type.map_or(other.sub_type.is_none(), |lhs| other.sub_type.map_or(false, |rhs| *lhs == *rhs))
     }
 }
 
 impl DynamicType {
     /// Converts a TYPE subtree into a recursive `DynamicType` representation.
-    /// 
+    ///
     /// `node` should be a `NodeId` pointing to a TYPE node in an `Arena`.
     fn from_tree_node(node: NodeId, arena: &Arena<Rc<Token>>) -> DynamicType {
         // The base type can be detected from the first token in a type declaration
@@ -104,8 +109,8 @@ impl DynamicType {
         DynamicType {
             cur_type: cur_type,
             sub_type: match cur_type.is_recursive_type() {
-                true    => Some(Box::new(DynamicType::from_tree_node(node.children(arena).last().unwrap(), arena))),
-                false   => None,
+                true    => Rc::new(Some(Box::new(DynamicType::from_tree_node(node.children(arena).last().unwrap(), arena)))),
+                false   => Rc::new(None),
             }
         }
     }
