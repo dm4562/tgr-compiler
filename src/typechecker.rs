@@ -287,7 +287,7 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
     Ok(ctable)
 }
 
-fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<DynamicType, &'static str> {
+fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, &'static str> {
     let mut expr_child_iterator = expr_node.children(arena);
     while let Some(clause_node) = expr_child_iterator.nth(2) {
         // Evaluate clause node
@@ -303,7 +303,11 @@ fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<DynamicT
     Err("unimplemented")
 }
 
-fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<DynamicType, &'static str> {
+fn evaluate_exprs(exprs_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, &'static str> {
+    Err("unimplemented")
+}
+
+fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, &'static str> {
     let mut clause_child_iter = clause_node.children(arena);
     while let Some(pred_node) = clause_child_iter.nth(2) {
 
@@ -315,7 +319,7 @@ fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<Dyna
     Err("unimplemented")
 }
 
-fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<DynamicType, &'static str> {
+fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, &'static str> {
     let mut term_child_iter = term_node.children(arena);
 
     while let Some(factor_node) = term_child_iter.nth(2) {
@@ -336,17 +340,49 @@ fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<DynamicT
     Err("unimplemented")
 }
 
-fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<DynamicType, &'static str> {
-    let factor_child = factor_node.children(arena).next().unwrap();
+fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, &'static str> {
+    let factor_child: NodeId = factor_node.children(arena).next().unwrap();
 
     // Check if factor is a constant literal
-    let mut factor_type = DynamicType::from_const_token(&*(arena[factor_child].data));
+    let factor_type = DynamicType::from_const_token(&*(arena[factor_child].data));
     match factor_type {
         Some(t) => return Ok(t),
         None    => {}
     };
 
-     Err("unimplemented")
+    let ret_type: Result<DynamicType, &'static str>;
+    if (*arena[factor_child].data).token_name.eq("identifier") {
+        // If factor starts with an identifier
+        let id_type: DynamicType = match ctable.find(&*(arena[factor_child].data).val) {
+            Some(t) => t.clone(),
+            None    => return Err("Type mismatch error")
+        };
+
+        let bracket_node = match factor_child.following_siblings(arena).next() {
+            Some(bracket)   => bracket,
+            None            => return Ok(id_type)
+        };
+
+        let e_node = match bracket_node.following_siblings(arena).next() {
+            Some(node)  => node,
+            None        => return Err("Expected expression")
+        };
+
+        ret_type = match &*arena[bracket_node].data.val.as_str() {
+            "[" => evaluate_expr(e_node, arena, ctable),
+            "(" => evaluate_exprs(e_node, arena, ctable),
+            _   => return Err("Unexpected bracket")
+        };
+    } else {
+        let e_node = match factor_child.following_siblings(arena).next() {
+            Some(node)  => node,
+            None        => return Err("Could not find EXPR node")
+        };
+
+        ret_type = evaluate_expr(e_node, arena, ctable);
+    }
+
+    ret_type
 }
 
 pub fn build_ast(ast: &Vec<Rc<Token>>) -> (Arena<Rc<Token>>, NodeId) {
