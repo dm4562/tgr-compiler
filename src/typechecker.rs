@@ -62,13 +62,13 @@ enum BaseType {
 }
 
 impl BaseType {
-    fn from_str(s: &str) -> BaseType {
+    fn from_str(s: &str) -> Option<BaseType> {
         match s {
-            "int"       => BaseType::Integer,
-            "float"     => BaseType::Float,
-            "boolean"   => BaseType::Boolean,
-            "array"     => BaseType::Array,
-            _           => panic!("invalid type reached the typechecker!"),
+            "int"       => Some(BaseType::Integer),
+            "float"     => Some(BaseType::Float),
+            "boolean"   => Some(BaseType::Boolean),
+            "array"     => Some(BaseType::Array),
+            _           => None,
         }
     }
 
@@ -102,16 +102,27 @@ impl DynamicType {
     /// Converts a TYPE subtree into a recursive `DynamicType` representation.
     ///
     /// `node` should be a `NodeId` pointing to a TYPE node in an `Arena`.
-    fn from_tree_node(node: NodeId, arena: &Arena<Rc<Token>>) -> DynamicType {
+    fn from_tree_node(node: NodeId, arena: &Arena<Rc<Token>>, symbol_table: &SymbolTable) -> Option<DynamicType> {
         // The base type can be detected from the first token in a type declaration
-        let cur_type = BaseType::from_str(&*(arena[node.children(arena).nth(0).unwrap()].data.val));
-        DynamicType {
+        let type_name = &*(arena[node.children(arena).nth(0).unwrap()].data.val);
+        let cur_type = match BaseType::from_str(type_name) {
+            Some(base)  => base,
+            None        => match symbol_table.find(type_name) {
+                Some(dyn_type)  => return Some(dyn_type.clone()),
+                None            => return None,
+            }
+        };
+
+        Some(DynamicType {
             cur_type: cur_type,
             sub_type: match cur_type.is_recursive_type() {
-                true    => Some(Rc::new(Box::new(DynamicType::from_tree_node(node.children(arena).last().unwrap(), arena)))),
+                true    => match DynamicType::from_tree_node(node.children(arena).last().unwrap(), arena, symbol_table) {
+                    Some(dyn_type)  => Some(Rc::new(Box::new(dyn_type))),
+                    None            => return None,
+                },
                 false   => None,
             }
-        }
+        })
     }
 }
 
@@ -164,9 +175,9 @@ fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> SymbolTa
         let id = arena[n].data.clone();
         n = child.children(&arena).nth(3).expect("Could not extract TYPE");
         let nt_type = arena[n].data.clone();
-        let ret_type = DynamicType::from_tree_node(n, &arena);
-
-        atable.push(&(*id).val, ret_type);
+        let ret_type = DynamicType::from_tree_node(n, &arena, &atable);
+        // TODO throw type-checking error if ret_type is None
+        atable.push(&(*id).val, ret_type.unwrap());
         iter = iter.next().expect("Expected TYPEDECLS").children(&arena);
     }
 
