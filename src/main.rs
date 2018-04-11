@@ -105,5 +105,10 @@ fn main() {
         Err(msg) => { eprintln!("Parse error: {}", msg); process::exit(1); }
     };
 
-    typechecker::build_type_maps(&new_ast);
+    let (mut arena, mut ast_root) = typechecker::build_ast(&new_ast);
+
+    match typechecker::build_type_maps(&arena, ast_root) {
+        Ok(a)       => print!("{}\n {}", a.0, a.1),
+        Err(msg)    => eprintln!("{}", msg.to_owned())
+    };
 }
