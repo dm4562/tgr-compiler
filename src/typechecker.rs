@@ -44,10 +44,9 @@ impl SymbolTable {
 
 impl fmt::Display for SymbolTable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // let mut out = String::new();
-        write!(f, "Symbol Table\n");
+        write!(f, "Symbol Table\n")?;
         for key in self.map.keys() {
-            write!(f, "{} - {:?}\n", key, self.map.get(key).unwrap());
+            write!(f, "{} - {:?}\n", key, self.map.get(key).unwrap())?;
         }
         write!(f, "\n")
     }
@@ -112,26 +111,26 @@ impl PartialEq for DynamicType {
 }
 
 impl DynamicType {
-    /// Converts a TYPE subtree into a recursive `DynamicType` representation.
+    /// Attempts to convert a TYPE subtree into a recursive `DynamicType` representation.
     ///
     /// `node` should be a `NodeId` pointing to a TYPE node in an `Arena`.
-    fn from_tree_node(node: NodeId, arena: &Arena<Rc<Token>>, symbol_table: &SymbolTable) -> Option<DynamicType> {
+    fn from_tree_node(node: NodeId, arena: &Arena<Rc<Token>>, symbol_table: &SymbolTable) -> Result<DynamicType, String> {
         // The base type can be detected from the first token in a type declaration
         let type_name = &*(arena[node.children(arena).nth(0).unwrap()].data.val);
         let cur_type = match BaseType::from_str(type_name) {
             Some(base)  => base,
             None        => match symbol_table.find(type_name) {
-                Some(dyn_type)  => return Some(dyn_type.clone()),
-                None            => return None,
+                Some(dyn_type)  => return Ok(dyn_type.clone()),
+                None            => return Err(format!("'{}' is not a valid type!", type_name)),
             }
         };
 
-        Some(DynamicType {
+        Ok(DynamicType {
             cur_type: cur_type,
             sub_type: match cur_type.is_recursive_type() {
                 true    => match DynamicType::from_tree_node(node.children(arena).last().unwrap(), arena, symbol_table) {
-                    Some(dyn_type)  => Some(Rc::new(Box::new(dyn_type))),
-                    None            => return None,
+                    Ok(t)  => Some(Rc::new(Box::new(t))),
+                    Err(e) => return Err(e),
                 },
                 false   => None,
             }
@@ -151,7 +150,7 @@ impl DynamicType {
     }
 }
 
-pub fn build_type_maps(arena: &Arena<Rc<Token>>, root: NodeId) -> Result<(SymbolTable, SymbolTable), &'static str> {
+pub fn build_type_maps(arena: &Arena<Rc<Token>>, root: NodeId) -> Result<(SymbolTable, SymbolTable), String> {
     let mut queue = VecDeque::new();
     queue.push_back(root);
     let mut curr: Option<NodeId> = None;
@@ -194,7 +193,7 @@ pub fn build_type_maps(arena: &Arena<Rc<Token>>, root: NodeId) -> Result<(Symbol
     Ok((atable, ctable))
 }
 
-fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<SymbolTable, &'static str> {
+fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<SymbolTable, String> {
     let mut atable = SymbolTable {
         map: HashMap::new()
     };
@@ -204,10 +203,9 @@ fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<S
         let mut n = typedecl_node.children(arena).nth(1).expect("Could not extract identifier");
         let id = arena[n].data.clone();
         n = typedecl_node.children(arena).nth(3).expect("Could not extract TYPE");
-        let ret_type = DynamicType::from_tree_node(n, arena, &atable);
-        // TODO: throw type-checking error if ret_type is None
-        // Should never encounter ^^ case coz would be parse error
-        atable.push(&(*id).val, ret_type.unwrap());
+        let ret_type = DynamicType::from_tree_node(n, arena, &atable)?;
+
+        atable.push(&(*id).val, ret_type);
         iter = iter.next().expect("Expected TYPEDECLS").children(arena);
     }
 
@@ -215,7 +213,7 @@ fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<S
     Ok(atable)
 }
 
-fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atable: &SymbolTable) -> Result<SymbolTable, &'static str> {
+fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atable: &SymbolTable) -> Result<SymbolTable, String> {
     let mut ctable = SymbolTable {
         map: HashMap::new()
     };
@@ -224,10 +222,7 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
     while let Some(vardecl_node) = iter.next() {
 
         let mut ndx = vardecl_node.children(arena).nth(3).expect("Could not extract TYPE");
-        let var_type = match DynamicType::from_tree_node(ndx, arena, atable) {
-            Some(t) => t,
-            None    => return Err("Type mismatch error!")
-        };
+        let var_type = DynamicType::from_tree_node(ndx, arena, atable)?;
 
         let mut ids_iter = vardecl_node.children(arena).nth(1).unwrap().children(arena);
         while let Some(nt_ids) = ids_iter.next() {
@@ -245,11 +240,11 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
             let const_token_rc = arena[const_ndx].data.clone();
             let const_type: DynamicType = match DynamicType::from_const_token(&*const_token_rc) {
                 Some(t) => t,
-                None    => return Err("Type mismatch error!")
+                None    => return Err(format!("unable to resolve constant '{}' type!", const_token_rc.val))
             };
 
             if !const_type.eq(&var_type) {
-                return Err("Type mismatch error!");
+                return Err(format!("type mismatch error!"));
             }
         }
 
@@ -260,7 +255,7 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
     while let Some(func_node) = iter.next() {
         // Extract function return type
         let type_node = func_node.children(arena).nth(6).unwrap();
-        let ret_type = DynamicType::from_tree_node(type_node, arena, atable);
+        let ret_type = DynamicType::from_tree_node(type_node, arena, atable)?;
 
         // Extract function identifier
         let id_ndx = func_node.children(arena).nth(1).unwrap();
@@ -273,8 +268,8 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
             let mut neparams_iter = neparams_node.children(arena);
             while let Some(param_node) = neparams_iter.next() {
                 let param_type_node = param_node.children(arena).nth(2).unwrap();
-                let param_type = DynamicType::from_tree_node(param_type_node, arena, atable);
-                ctable.push(&(*id).val, param_type.clone().unwrap());
+                let param_type = DynamicType::from_tree_node(param_type_node, arena, atable)?;
+                ctable.push(&(*id).val, param_type);
 
                 neparams_iter = match neparams_iter.next() {
                     Some(node)  => node.children(arena),
@@ -284,7 +279,7 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
         }
 
         // Insert return type
-        ctable.push(&(*id).val, ret_type.clone().unwrap());
+        ctable.push(&(*id).val, ret_type);
         iter = iter.next().unwrap().children(arena);
     }
 
