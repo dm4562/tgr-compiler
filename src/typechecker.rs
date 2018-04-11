@@ -72,6 +72,19 @@ impl BaseType {
         }
     }
 
+    fn from_const_token(token: &Token) -> Option<BaseType> {
+        match token.token_name {
+            "intlit"    => Some(BaseType::Integer),
+            "floatlit"  => Some(BaseType::Float),
+            "boolean"   => Some(BaseType::Boolean),
+            _           => match &(*token.val.as_str()) {
+                "true"  => Some(BaseType::Boolean),
+                "false" => Some(BaseType::Boolean),
+                _       => None
+            }
+        }
+    }
+
     fn is_recursive_type(&self) -> bool {
         *self == BaseType::Array
     }
@@ -124,11 +137,21 @@ impl DynamicType {
             }
         })
     }
+
+    fn from_const_token(token: &Token) -> Option<DynamicType> {
+        let cur_type = match BaseType::from_const_token(token) {
+            Some(base)  => base,
+            None        => return None
+        };
+
+        Some(DynamicType {
+            cur_type: cur_type,
+            sub_type: None
+        })
+    }
 }
 
-pub fn build_type_maps(ast: &Vec<Rc<Token>>) -> (SymbolTable, SymbolTable) {
-    let (arena, root) = build_ast(&ast);
-
+pub fn build_type_maps(arena: &Arena<Rc<Token>>, root: NodeId) -> Result<(SymbolTable, SymbolTable), &'static str> {
     let mut queue = VecDeque::new();
     queue.push_back(root);
     let mut curr: Option<NodeId> = None;
@@ -147,7 +170,7 @@ pub fn build_type_maps(ast: &Vec<Rc<Token>>) -> (SymbolTable, SymbolTable) {
     let mut vardecls_node: Option<NodeId> = None;
     let mut funcdecls_node: Option<NodeId> = None;
 
-    for child in curr.expect("Couldn't find declseg").children(&arena) {
+    for child in curr.expect("Couldn't find declseg").children(arena) {
         if (*arena[child].data).token_name.eq("nonterminal") {
             match (arena[child].data).val.as_str() {
                 "typedecls"     => typedecls_node   = Some(child),
@@ -158,12 +181,20 @@ pub fn build_type_maps(ast: &Vec<Rc<Token>>) -> (SymbolTable, SymbolTable) {
         }
     }
 
-    let atable = build_alias_map(typedecls_node.unwrap(), &arena);
-    let ctable = build_context_map(vardecls_node.unwrap(), funcdecls_node.unwrap(), &arena, &atable);
-    (atable, ctable)
+    let atable = match build_alias_map(typedecls_node.unwrap(), arena) {
+        Ok(table)   => table,
+        Err(msg)    => return Err(msg)
+    };
+
+    let ctable = match build_context_map(vardecls_node.unwrap(), funcdecls_node.unwrap(), arena, &atable) {
+        Ok(table)   => table,
+        Err(msg)    => return Err(msg)
+    };
+
+    Ok((atable, ctable))
 }
 
-fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> SymbolTable {
+fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> Result<SymbolTable, &'static str> {
     let mut atable = SymbolTable {
         map: HashMap::new()
     };
@@ -181,29 +212,44 @@ fn build_alias_map(typedecls_node: NodeId, arena: &Arena<Rc<Token>>) -> SymbolTa
     }
 
     // print!("{}", atable);
-    atable
+    Ok(atable)
 }
 
-fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atable: &SymbolTable) -> SymbolTable {
+fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atable: &SymbolTable) -> Result<SymbolTable, &'static str> {
     let mut ctable = SymbolTable {
         map: HashMap::new()
     };
 
     let mut iter = vardecls_node.children(arena);
-    while let Some(child) = iter.next() {
-        // Implement logic to parse out vardecl
+    while let Some(vardecl_node) = iter.next() {
 
-        let mut ndx = child.children(arena).nth(3).expect("Could not extract TYPE");
-        let var_type = DynamicType::from_tree_node(ndx, arena, atable);
+        let mut ndx = vardecl_node.children(arena).nth(3).expect("Could not extract TYPE");
+        let var_type = match DynamicType::from_tree_node(ndx, arena, atable) {
+            Some(t) => t,
+            None    => return Err("Type mismatch error!")
+        };
 
-        let mut ids_iter = child.children(arena).nth(1).unwrap().children(arena);
+        let mut ids_iter = vardecl_node.children(arena).nth(1).unwrap().children(arena);
         while let Some(nt_ids) = ids_iter.next() {
             let id = arena[nt_ids].data.clone();
-            ctable.push(&(*id).val, var_type.clone().unwrap());
+            ctable.push(&(*id).val, var_type.clone());
 
             ids_iter = match ids_iter.nth(1) {
                 Some(i) => i.children(&arena),
                 None    => break
+            }
+        }
+
+        if let Some(const_node) = vardecl_node.children(arena).nth(4).unwrap().children(arena).nth(1) {
+            let const_ndx = const_node.children(arena).next().unwrap();
+            let const_token_rc = arena[const_ndx].data.clone();
+            let const_type: DynamicType = match DynamicType::from_const_token(&*const_token_rc) {
+                Some(t) => t,
+                None    => return Err("Type mismatch error!")
+            };
+
+            if !const_type.eq(&var_type) {
+                return Err("Type mismatch error!");
             }
         }
 
@@ -243,7 +289,7 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
     }
 
     // print!("{}", ctable);
-    ctable
+    Ok(ctable)
 }
 
 pub fn build_ast(ast: &Vec<Rc<Token>>) -> (Arena<Rc<Token>>, NodeId) {
