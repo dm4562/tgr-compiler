@@ -242,8 +242,8 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
         iter = iter.next().unwrap().children(arena);
     }
 
-    // print!("{}", ctable);
-    ctable
+    // print!("{}", ttable);
+    ttable
 }
 
 pub fn build_ast(ast: &Vec<Rc<Token>>) -> (Arena<Rc<Token>>, NodeId) {
