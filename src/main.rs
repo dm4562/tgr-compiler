@@ -108,6 +108,8 @@ fn main() {
 
     let (mut arena, mut ast_root) = typechecker::build_ast(&new_ast);
 
+    typechecker::debug_print_ast(&arena, ast_root);
+
     match typechecker::check_program(&arena, ast_root) {
         Ok(a)       => print!(" {}\n {}\n {}", a.0, a.1, a.2),
         Err(msg)    => eprintln!("{}", msg.to_owned())

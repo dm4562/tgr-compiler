@@ -420,7 +420,10 @@ fn check_stmts(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTabl
         };
 
         check_stmt(stmt_node, arena, ctable, ftable)?;
-        node = node.children(arena).nth(1).unwrap();
+        node = match node.children(arena).nth(1) {
+            Some(n) => n,
+            None    => break,
+        };
     }
 
     Ok(())
@@ -487,6 +490,10 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
             //STMT -> LVALUE := EXPR
             let lhs_node = stmt_node.children(arena).nth(0).unwrap();
             let rhs_node = stmt_node.children(arena).nth(2).unwrap();
+            println!("{:?}", arena[rhs_node].data);
+            for child in rhs_node.children(arena) {
+                println!("--{:?}", arena[child].data);
+            }
             if evaluate_lvalue(lhs_node, arena, ctable, ftable)? != evaluate_expr(rhs_node, arena, ctable, ftable)? {
                 return Err(format!("type mismatch in assignment statement!"));
             }
@@ -497,6 +504,8 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
 }
 
 fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
+    println!("expr: {:?}", arena[expr_node].data);
+    // println!("{:?}", arena[expr_node.children(arena).nth(0).unwrap()].data);
     match expr_node.children(arena).nth(2) {
         Some(clause_node)  => {
             let clause_type = evaluate_clause(clause_node, arena, ctable, ftable)?;
@@ -528,28 +537,17 @@ fn evaluate_exprs(exprs_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolT
 }
 
 fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
-    let mut node = clause_node;
-    let mut flag = false;
-    while let Some(pred_node) = node.children(arena).nth(2) {
-        flag = true;
-        evaluate_pred(pred_node, arena, ctable, ftable)?;
-        // Iteratively expand clause
-        // Unwrap should never fail here
-        node = node.children(arena).next().unwrap();
-    }
-
-    let final_node = match node.children(arena).next() {
-        Some(node)  => node,
-        None        => return Err("Invalid AEXPR".to_owned())
-    };
-
-    if !flag {
-        evaluate_pred(final_node, arena, ctable, ftable)
-    } else {
-        Ok(DynamicType {
-            cur_type: BaseType::Boolean,
-            sub_type: None
-        })
+    println!("clause: {:?}", arena[clause_node].data);
+    match clause_node.children(arena).nth(2) {
+        Some(pred_node)  => {
+            let pred_type = evaluate_pred(pred_node, arena, ctable, ftable)?;
+            let clause_type = evaluate_clause(clause_node.children(arena).nth(0).unwrap(), arena, ctable, ftable)?;
+            match pred_type == clause_type {
+                true    => Ok(clause_type),
+                false   => Err(format!("expression is not well-typed!")),
+            }
+        }
+        None => evaluate_pred(clause_node.children(arena).nth(0).unwrap(), arena, ctable, ftable)
     }
 }
 
@@ -666,15 +664,15 @@ fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTab
 fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let factor_child: NodeId = factor_node.children(arena).next().unwrap();
 
-    // Check if factor is a constant literal
-    let factor_type = DynamicType::from_const_token(&*(arena[factor_child].data));
-    match factor_type {
-        Some(t) => return Ok(t),
-        None    => {}
-    };
-
     let ret_type: Result<DynamicType, String>;
-    if (*arena[factor_child].data).token_name.eq("identifier") {
+    if (*(arena[factor_child].data).val).eq("const") {
+        // Check if factor is a constant literal
+        let factor_type = DynamicType::from_const_token(&*(arena[factor_child.children(arena).nth(0).unwrap()].data));
+        ret_type = match factor_type {
+            Some(t) => Ok(t),
+            None    => { panic!("Parse error with CONST!"); }
+        };
+    } else if (*arena[factor_child].data).token_name.eq("id") {
         // If factor starts with an identifier
         let id = (*arena[factor_child].data).val.clone();
         let id_type: DynamicType = match ctable.find(&id) {
@@ -682,15 +680,21 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
             None    => return Err("Type mismatch error: Type not found".to_owned())
         };
 
-        let bracket_node = match factor_child.following_siblings(arena).next() {
+        let bracket_node = match factor_child.following_siblings(arena).nth(1) {
             Some(bracket)   => bracket,
             None            => return Ok(id_type)
         };
 
-        let e_node = match bracket_node.following_siblings(arena).next() {
+        println!("bracket_node: {:?}", arena[bracket_node].data);
+
+
+        let e_node = match bracket_node.following_siblings(arena).nth(1) {
             Some(node)  => node,
             None        => return Err("expression not found".to_owned())
         };
+
+        println!("e_node: {:?}", arena[e_node].data);
+
 
         ret_type = match &*arena[bracket_node].data.val.as_str() {
             "[" => {
@@ -699,7 +703,9 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
                 if e_type.cur_type != BaseType::Integer {
                     Err("Type mismatch error: Can only index with Integer".to_owned())
                 } else {
-                    match e_type.sub_type {
+                    // return e_type;
+                    println!("lollipop: {:?}", id_type);
+                    match id_type.sub_type {
                         Some(rc_type)   => Ok((**rc_type).clone()),
                         None            => Err("Type mismatch error".to_owned())
                     }
@@ -713,14 +719,14 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
                     Ok(id_type)
                 }
             },
-            _   => Err("Unexpected bracket".to_owned())
+            _   => Err(format!("Unexpected bracket wtf: {}", arena[factor_child].data))
         };
     } else {
-        let e_node = match factor_child.following_siblings(arena).next() {
+        let e_node = match factor_child.following_siblings(arena).nth(0) {
             Some(node)  => node,
             None        => return Err("Could not find EXPR node".to_owned())
         };
-
+        
         ret_type = evaluate_expr(e_node, arena, ctable, ftable);
     }
 
@@ -751,19 +757,44 @@ pub fn build_ast(ast: &Vec<Rc<Token>>) -> (Arena<Rc<Token>>, NodeId) {
     (arena, root)
 }
 
-pub fn debug_print_ast(arena: &Arena<Rc<Token>>, root: NodeId) {
-    let mut v = VecDeque::new();
-    let mut i = 1;
-    v.push_back((root, 1));
-    print!("\n");
-    let mut curr: Rc<Token>;
-    while !v.is_empty() {
-        let (curr, i) = v.pop_front().unwrap();
-        // print!("{}-", arena[curr].data);
-        for mut child in curr.children(&arena) {
-            print!("{}:{} ", arena[child].data, i);
-            v.push_back((child, i + 1));
-        };
-        print!("\n");
+pub fn debug_print_ast(arena: &Arena<Rc<Token>>, node: NodeId) {
+    debug_print_inner(arena, node);
+    println!();
+}
+
+pub fn debug_print_inner(arena: &Arena<Rc<Token>>, node: NodeId) {
+    let node_token = arena[node].data.clone();
+
+    let print_braces = node_token.token_name == "nonterminal" && node.children(arena).count() > 0;
+
+    if print_braces {
+        print!(" (")
+    } else {
+        print!(" ");
     }
+    
+    print!("{}", node_token.val);
+
+    for child in node.children(arena) {
+        debug_print_inner(arena, child);
+    }
+
+    if print_braces {
+        print!(")")
+    }
+
+    // let mut v = VecDeque::new();
+    // let mut i = 1;
+    // v.push_back((root, 1));
+    // print!("\n");
+    // let mut curr: Rc<Token>;
+    // while !v.is_empty() {
+    //     let (curr, i) = v.pop_front().unwrap();
+    //     // print!("{}-", arena[curr].data);
+    //     for mut child in curr.children(&arena) {
+    //         print!("{}:{} ", arena[child].data, i);
+    //         v.push_back((child, i + 1));
+    //     };
+    //     print!("\n");
+    // }
 }
