@@ -389,16 +389,28 @@ fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTab
     evaluate_clause(final_node, arena, ctable, ftable)
 }
 
-fn evaluate_exprs(exprs_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<Vec<DynamicType>, String> {
+fn evaluate_exprs(exprs_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<Vec<DynamicType>, String> {
+    let mut result: Vec<DynamicType> = Vec::new();
+    let mut neexprs_node = match exprs_node.children(arena).next() {
+        Some(node)  => node,
+        None => return Ok(result)
+    };
 
+    while let Some(expr_node) = neexprs_node.children(arena).next() {
+        let expr_type = evaluate_expr(expr_node, arena, ctable, ftable)?;
+        result.push(expr_type);
+        // Iterate over neexprs
+        neexprs_node = neexprs_node.children(arena).nth(2).unwrap();
+    }
 
-
-    Err("unimplemented".to_owned())
+    Ok(result)
 }
 
 fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let mut node = clause_node;
+    let mut flag = false;
     while let Some(pred_node) = node.children(arena).nth(2) {
+        flag = true;
         evaluate_pred(pred_node, arena, ctable, ftable)?;
         // Iteratively expand clause
         // Unwrap should never fail here
@@ -410,33 +422,44 @@ fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
         None        => return Err("Invalid AEXPR".to_owned())
     };
 
-    evaluate_pred(final_node, arena, ctable, ftable)
+    if !flag {
+        evaluate_pred(final_node, arena, ctable, ftable)
+    } else {
+        Ok(DynamicType {
+            cur_type: BaseType::Boolean,
+            sub_type: None
+        })
+    }
 }
 
 fn evaluate_pred(pred_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let mut node = pred_node;
 
+    let mut flag = false;
     while let Some(aexpr_node) = node.children(arena).nth(2) {
         // evaluate term_node
-        let aexpr_type = evalueate_aexpr(aexpr_node, arena, ctable, ftable)?;
+        flag = true;
+        evaluate_aexpr(aexpr_node, arena, ctable, ftable)?;
 
         node = node.children(arena).next().expect("AEXPR not found in PRED");
     }
 
-    let final_term_node = match node.children(arena).next() {
+    let final_aexpr = match node.children(arena).next() {
         Some(node)  => node,
         None        => return Err("Invalid AEXPR".to_owned())
     };
 
-    evaluate_term(final_term_node, arena, ctable, ftable)?;
-
-    Ok(DynamicType {
-        cur_type: BaseType::Boolean,
-        sub_type: None
-    })
+    if !flag {
+        evaluate_aexpr(final_aexpr, arena, ctable, ftable)
+    } else {
+        Ok(DynamicType {
+            cur_type: BaseType::Boolean,
+            sub_type: None
+        })
+    }
 }
 
-fn evalueate_aexpr(aexpr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
+fn evaluate_aexpr(aexpr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let mut node = aexpr_node;
 
     let mut pre_term_type: Option<DynamicType> = None;
@@ -562,7 +585,7 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
                 }
             },
             "(" => {
-                let arglist = evaluate_exprs(e_node, arena, ctable)?;
+                let arglist = evaluate_exprs(e_node, arena, ctable, ftable)?;
                 if !ftable.match_args(&id, &arglist) {
                     Err("Type mismatch error!".to_owned())
                 } else {
