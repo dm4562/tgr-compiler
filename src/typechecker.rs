@@ -284,7 +284,7 @@ fn build_func_context_map(funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atab
                 }
             }
         }
-        
+
 
         // Insert return type
         ctable.push(&(*id).val, ret_type)?;
@@ -336,12 +336,28 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
 }
 
 fn check_funcdecls(funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<(), String> {
+    let mut node = funcdecls_node;
+
+    while let Some(funcdecl_node) = node.children(arena).nth(0) {
+        let id_ndx = funcdecl_node.children(arena).nth(1).unwrap();
+        let func_name = &*arena[id_ndx].data.val;
+
+        let func_ret_type = match ctable.find(func_name) {
+            Some(t) => t,
+            None    => return Err("Return type not defined".to_owned())
+        };
+
+        check_funcdecl(funcdecl_node, arena, ctable, ftable, func_ret_type, func_name)?;
+
+        node = node.children(arena).nth(1).unwrap();
+    }
+
     Ok(())
 }
 
-fn check_funcdecl(funcdecl_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable, ret_type: DynamicType, func_name: &String) -> Result<(), String> {
+fn check_funcdecl(funcdecl_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable, ret_type: &DynamicType, func_name: &String) -> Result<(), String> {
     check_stmts(funcdecl_node.children(arena).nth(8).unwrap(), arena, ctable, ftable)?;
-    check_return_paths(funcdecl_node.children(arena).nth(8).unwrap(), arena, ctable, ftable, &ret_type, func_name)?;
+    check_return_paths(funcdecl_node.children(arena).nth(8).unwrap(), arena, ctable, ftable, ret_type, func_name)?;
 
     Ok(())
 }
