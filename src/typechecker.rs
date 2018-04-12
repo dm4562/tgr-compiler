@@ -369,6 +369,96 @@ fn check_return_paths(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Sym
     cur_return.map_or(Err(format!("does not return a value on all code paths!")), |ret| Ok(Some(ret)))
 }
 
+fn evaluate_id(id_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, String> {
+    // match ftable {
+    //     Some(f) => match f.map.get(key)(id) {
+    //         Some(t)  => return Ok(t),
+    //         None        => {},
+    //     },
+    //     None    => {},
+    // };
+
+    let id = &*arena[id_node].data.val;
+    match ctable.find(id) {
+        Some(t) => Ok(t.clone()),
+        None    => Err(format!("symbol '{}' is not defined!", id)),
+    }
+}
+
+fn check_stmts(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<(), String> {
+    Ok(())
+}
+
+fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<(), String> {
+    fn evaluate_lvalue(lvalue_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
+        let id_node = lvalue_node.children(arena).nth(0).unwrap();
+        let id_type = evaluate_id(id_node, arena, ctable)?;
+        // Check if OPTOFFSET is there (indexing into a value)
+        match lvalue_node.children(arena).nth(1).unwrap().children(arena).nth(1) {
+            Some(optoffset_node) => {
+                // Make sure the index is an integer
+                if evaluate_expr(optoffset_node, arena, ctable, ftable)?.cur_type != BaseType::Integer {
+                    return Err(format!("index expressions must be of type int!"));
+                }
+                match id_type.sub_type {
+                    Some(sub_type)  => Ok((**sub_type).clone()),
+                    None            => return Err(format!("'{}' is not of an indexable type!", &*arena[id_node].data.val)),
+                }
+            },
+            None    => Ok(id_type),
+        }
+    }
+
+    match (*arena[stmt_node.children(arena).nth(0).unwrap()].data.val).as_str() {
+        "if"        => {
+            /*
+             * STMT -> if EXPR then STMTS endif
+             * STMT -> if EXPR then STMTS else STMTS endif
+             */
+            if evaluate_expr(stmt_node.children(arena).nth(1).unwrap(), arena, ctable, ftable)?.cur_type != BaseType::Boolean {
+                return Err(format!("an if condition must be of type boolean!"));
+            }
+            check_stmts(stmt_node.children(arena).nth(3).unwrap(), arena, ctable)?;
+            match stmt_node.children(arena).nth(5) {
+                Some(else_stmts_node) => { check_stmts(else_stmts_node, arena, ctable)?; },
+                None  => {},
+            }
+        },
+        "while"     => {
+            // STMT -> while EXPR do STMTS enddo
+            if evaluate_expr(stmt_node.children(arena).nth(1).unwrap(), arena, ctable, ftable)?.cur_type != BaseType::Boolean {
+                return Err(format!("a while condition must be of type boolean!"));
+            }
+            check_stmts(stmt_node.children(arena).nth(3).unwrap(), arena, ctable)?;
+        },
+        "for"       => {
+            // STMT -> for id := EXPR to EXPR do STMTS enddo
+            if evaluate_id(stmt_node.children(arena).nth(0).unwrap(), arena, ctable)?.cur_type != BaseType::Integer {
+                return Err(format!("a while condition must be of type boolean!"));
+            }
+            if evaluate_expr(stmt_node.children(arena).nth(3).unwrap(), arena, ctable, ftable)?.cur_type != BaseType::Integer {
+                return Err(format!("a while condition must be of type boolean!"));
+            }
+            if evaluate_expr(stmt_node.children(arena).nth(5).unwrap(), arena, ctable, ftable)?.cur_type != BaseType::Integer {
+                return Err(format!("a while condition must be of type boolean!"));
+            }
+            check_stmts(stmt_node.children(arena).nth(3).unwrap(), arena, ctable)?;
+        },
+        "break"     => {},
+        "return"    => {},
+        _           => {
+            //STMT -> LVALUE := EXPR
+            let lhs_node = stmt_node.children(arena).nth(0).unwrap();
+            let rhs_node = stmt_node.children(arena).nth(2).unwrap();
+            if evaluate_lvalue(lhs_node, arena, ctable, ftable)? != evaluate_expr(rhs_node, arena, ctable, ftable)? {
+                return Err(format!("type mismatch in assignment statement!"));
+            }
+        },
+    }
+
+    Ok(())
+}
+
 fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let mut node = expr_node;
     while let Some(clause_node) = node.children(arena).nth(2) {
