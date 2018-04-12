@@ -416,7 +416,7 @@ fn evaluate_id(id_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) 
 }
 
 fn check_stmts(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<(), String> {
-    println!("stmts: {:?}", arena[stmts_node].data);
+    // println!("stmts: {:?}", arena[stmts_node].data);
     let mut node = stmts_node;
 
     while let Some(fullstmt_node) = node.children(arena).next() {
@@ -455,7 +455,7 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
         }
     }
 
-    println!("stmt1: {:?}", arena[stmt_node].data);
+    // println!("stmt1: {:?}", arena[stmt_node].data);
 
     match (*arena[stmt_node.children(arena).nth(0).unwrap()].data.val).as_str() {
         "if"        => {
@@ -496,11 +496,11 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
         "return"    => {},
         _           => {
             //STMT -> LVALUE := EXPR
-            println!("stmt: {:?}", arena[stmt_node.children(arena).nth(0).unwrap()].data);
+            // println!("stmt: {:?}", arena[stmt_node.children(arena).nth(0).unwrap()].data);
             let lhs_node = stmt_node.children(arena).nth(0).unwrap();
             let rhs_node = stmt_node.children(arena).nth(2).unwrap();
             for child in rhs_node.children(arena) {
-                println!("--{:?}", arena[child].data);
+                // println!("--{:?}", arena[child].data);
             }
             if evaluate_lvalue(lhs_node, arena, ctable, ftable)? != evaluate_expr(rhs_node, arena, ctable, ftable)? {
                 return Err(format!("type mismatch in assignment statement!"));
@@ -512,7 +512,7 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
 }
 
 fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
-    println!("expr: {:?}", arena[expr_node].data);
+    // println!("expr: {:?}", arena[expr_node].data);
     // println!("{:?}", arena[expr_node.children(arena).nth(0).unwrap()].data);
     match expr_node.children(arena).nth(2) {
         Some(clause_node)  => {
@@ -538,19 +538,19 @@ fn evaluate_exprs(exprs_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolT
         let expr_type = evaluate_expr(expr_node, arena, ctable, ftable)?;
         result.push(expr_type);
         // Iterate over neexprs
-        println!("exprs1: {:?}", neexprs_node.children(arena).count());
+        // println!("exprs1: {:?}", neexprs_node.children(arena).count());
         neexprs_node = match neexprs_node.children(arena).nth(2) {
             Some(n) => n,
             None    => break
         };
-        println!("exprs: {:?}", arena[neexprs_node].data);
+        // println!("exprs: {:?}", arena[neexprs_node].data);
     }
 
     Ok(result)
 }
 
 fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
-    println!("clause: {:?}", arena[clause_node].data);
+    // println!("clause: {:?}", arena[clause_node].data);
     match clause_node.children(arena).nth(2) {
         Some(pred_node)  => {
             let pred_type = evaluate_pred(pred_node, arena, ctable, ftable)?;
@@ -638,7 +638,7 @@ fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTab
     let mut term_child_iter = curr_term_node.children(arena);
 
     let mut pre_factor_type: Option<DynamicType> = None;
-    while let Some(factor_node) = term_child_iter.nth(2) {
+    while let Some(factor_node) = curr_term_node.children(arena).nth(2) {
         // get the type of factor node
         let factor_type: DynamicType = evaluate_factor(factor_node, arena, ctable, ftable)?;
         pre_factor_type = match pre_factor_type {
@@ -655,10 +655,9 @@ fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTab
         // Iteratively expand term
         // Unwrap should never fail here
         curr_term_node = curr_term_node.children(arena).next().unwrap();
-        term_child_iter = curr_term_node.children(arena);
     }
 
-    let final_factor_node = term_node.children(arena).next().unwrap();
+    let final_factor_node = curr_term_node.children(arena).next().unwrap();
     let final_factor_type = evaluate_factor(final_factor_node, arena, ctable, ftable)?;
     pre_factor_type = match pre_factor_type {
         Some(pre_type)  => {
@@ -698,7 +697,7 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
             None            => return Ok(id_type)
         };
 
-        println!("bracket_node: {:?}", arena[bracket_node].data);
+        // println!("bracket_node: {:?}", arena[bracket_node].data);
 
 
         let e_node = match bracket_node.following_siblings(arena).nth(1) {
@@ -706,7 +705,7 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
             None        => return Err("expression not found".to_owned())
         };
 
-        println!("e_node: {:?}", arena[e_node].data);
+        // println!("e_node: {:?}", arena[e_node].data);
 
 
         ret_type = match &*arena[bracket_node].data.val.as_str() {
@@ -717,7 +716,7 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
                     Err("Type mismatch error: Can only index with Integer".to_owned())
                 } else {
                     // return e_type;
-                    println!("lollipop: {:?}", id_type);
+                    // println!("lollipop: {:?}", id_type);
                     match id_type.sub_type {
                         Some(rc_type)   => Ok((**rc_type).clone()),
                         None            => Err("Type mismatch error".to_owned())
@@ -740,6 +739,7 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
             None        => return Err("Could not find EXPR node".to_owned())
         };
         
+        // println!("factor11: {:?}", arena[factor_node].data);
         ret_type = evaluate_expr(e_node, arena, ctable, ftable);
     }
 
