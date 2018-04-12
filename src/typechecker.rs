@@ -280,7 +280,7 @@ fn build_func_context_map(funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atab
             }
         }
 
-        check_return_paths(func_node.children(arena).nth(8).unwrap(), arena, ctable, &ret_type, &id.val)?;
+        check_return_paths(func_node.children(arena).nth(8).unwrap(), arena, ctable, &ftable, &ret_type, &id.val)?;
 
         // Insert return type
         ctable.push(&(*id).val, ret_type)?;
@@ -336,17 +336,17 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
 
 
 /// Checks that all possible executable paths in a function return and return the correct type.
-fn check_return_paths(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ret_type: &DynamicType, name: &String) -> Result<Option<DynamicType>, String> {
+fn check_return_paths(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable, ret_type: &DynamicType, name: &String) -> Result<Option<DynamicType>, String> {
     let mut cur_return: Option<DynamicType> = None;
 
     for child_node in stmts_node.children(arena) {
         match arena[child_node].data.val.as_str() {
             "if"    => {
-                check_return_paths(child_node.children(arena).nth(3).unwrap(), arena, ctable, ret_type, name)?;
+                check_return_paths(child_node.children(arena).nth(3).unwrap(), arena, ctable, ftable, ret_type, name)?;
                 // If both 'if' and 'else' parts have a return type, then the whole block has a return value as well
                 match child_node.children(arena).nth(5) {
                     Some(v) => {
-                        if let Some(ret_type) = check_return_paths(child_node.children(arena).nth(3).unwrap(), arena, ctable, ret_type, name)? {
+                        if let Some(ret_type) = check_return_paths(child_node.children(arena).nth(3).unwrap(), arena, ctable, ftable, ret_type, name)? {
                             cur_return = Some(ret_type);
                         }
                     },
@@ -354,7 +354,7 @@ fn check_return_paths(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Sym
                     }
             }
             "return"    => {
-                let new_ret_type = evaluate_expr(child_node.children(arena).nth(3).unwrap(), arena, ctable)?;
+                let new_ret_type = evaluate_expr(child_node.children(arena).nth(3).unwrap(), arena, ctable, ftable)?;
                 cur_return = match new_ret_type == *ret_type {
                     true    => Some(new_ret_type),
                     false   => return Err(format!("the type of a return path of '{}' does not match its definition!", name)),
@@ -369,7 +369,6 @@ fn check_return_paths(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Sym
 
 fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let mut node = expr_node;
-    let mut pre_type: Option<DynamicType> = None;
     while let Some(clause_node) = node.children(arena).nth(2) {
         // Evaluate clause node
         evaluate_clause(clause_node, arena, ctable, ftable)?;
@@ -547,7 +546,7 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
         ret_type = match &*arena[bracket_node].data.val.as_str() {
             "[" => {
                 // TODO: return the array type
-                let e_type = evaluate_expr(e_node, arena, ctable)?;
+                let e_type = evaluate_expr(e_node, arena, ctable, ftable)?;
                 if e_type.cur_type != BaseType::Integer {
                     Err("Type mismatch error: Can only index with Integer".to_owned())
                 } else {
@@ -573,7 +572,7 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
             None        => return Err("Could not find EXPR node".to_owned())
         };
 
-        ret_type = evaluate_expr(e_node, arena, ctable);
+        ret_type = evaluate_expr(e_node, arena, ctable, ftable);
     }
 
     ret_type
