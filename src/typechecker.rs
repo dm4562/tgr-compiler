@@ -184,9 +184,9 @@ impl DynamicType {
     }
 }
 
-pub fn build_type_maps(arena: &Arena<Rc<Token>>, root: NodeId) -> Result<(SymbolTable, SymbolTable, FunctionTable), String> {
+pub fn check_program(arena: &Arena<Rc<Token>>, program_node: NodeId) -> Result<(SymbolTable, SymbolTable, FunctionTable), String> {
     let mut queue = VecDeque::new();
-    queue.push_back(root);
+    queue.push_back(program_node);
     let mut curr: Option<NodeId> = None;
     while let Some(node) = queue.pop_front() {
         if (arena[node].data.token_name).eq("nonterminal") && (*arena[node].data.val).eq("declseg") {
@@ -217,6 +217,9 @@ pub fn build_type_maps(arena: &Arena<Rc<Token>>, root: NodeId) -> Result<(Symbol
     let atable = build_alias_map(typedecls_node.unwrap(), arena)?;
     let mut ctable = build_context_map(vardecls_node.unwrap(), funcdecls_node.unwrap(), arena, &atable)?;
     let ftable = build_func_context_map(funcdecls_node.unwrap(), arena, &atable, &mut ctable)?;
+
+    check_funcdecls(funcdecls_node.unwrap(), arena, &ctable, &ftable)?;
+    check_stmts(program_node.children(arena).nth(3).unwrap(), arena, &ctable, &ftable)?;
 
     Ok((atable, ctable, ftable))
 }
@@ -281,8 +284,7 @@ fn build_func_context_map(funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atab
                 }
             }
         }
-
-        check_return_paths(func_node.children(arena).nth(8).unwrap(), arena, ctable, &ftable, &ret_type, &id.val)?;
+        
 
         // Insert return type
         ctable.push(&(*id).val, ret_type)?;
@@ -333,18 +335,13 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
     Ok(ctable)
 }
 
-fn check_stmts(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<(), String> {
-    let mut node = stmts_node;
+fn check_funcdecls(funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<(), String> {
+    Ok(())
+}
 
-    while let Some(fullstmt_node) = node.children(arena).next() {
-        let stmt_node = match fullstmt_node.children(arena).next() {
-            Some(n) => n,
-            None    => return Err("STMT not found".to_owned())
-        };
-
-        check_stmt(stmt_node, arena, ctable, ftable)?;
-        node = node.children(arena).nth(1).unwrap();
-    }
+fn check_funcdecl(funcdecl_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable, ret_type: DynamicType, func_name: &String) -> Result<(), String> {
+    check_stmts(funcdecl_node.children(arena).nth(8).unwrap(), arena, ctable, ftable)?;
+    check_return_paths(funcdecl_node.children(arena).nth(8).unwrap(), arena, ctable, ftable, &ret_type, func_name)?;
 
     Ok(())
 }
@@ -395,6 +392,22 @@ fn evaluate_id(id_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) 
         Some(t) => Ok(t.clone()),
         None    => Err(format!("symbol '{}' is not defined!", id)),
     }
+}
+
+fn check_stmts(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<(), String> {
+    let mut node = stmts_node;
+
+    while let Some(fullstmt_node) = node.children(arena).next() {
+        let stmt_node = match fullstmt_node.children(arena).next() {
+            Some(n) => n,
+            None    => return Err("STMT not found".to_owned())
+        };
+
+        check_stmt(stmt_node, arena, ctable, ftable)?;
+        node = node.children(arena).nth(1).unwrap();
+    }
+
+    Ok(())
 }
 
 fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<(), String> {
