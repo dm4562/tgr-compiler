@@ -367,36 +367,111 @@ fn check_return_paths(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Sym
     cur_return.map_or(Err(format!("does not return a value on all code paths!")), |ret| Ok(Some(ret)))
 }
 
-fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, String> {
-    let mut expr_child_iterator = expr_node.children(arena);
-    while let Some(clause_node) = expr_child_iterator.nth(2) {
+fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
+    let mut node = expr_node;
+    let mut pre_type: Option<DynamicType> = None;
+    while let Some(clause_node) = node.children(arena).nth(2) {
         // Evaluate clause node
-
+        evaluate_clause(clause_node, arena, ctable, ftable)?;
 
         // Iteratively expand expr
         // Unwrap should never fail here
-        expr_child_iterator = expr_node.children(arena).next().unwrap().children(arena);
+        node = node.children(arena).next().unwrap();
     }
 
     // Evaluate the last clause node
+    let final_node = match node.children(arena).next() {
+        Some(node)  => node,
+        None        => return Err("Invalid CLAUSE".to_owned())
+    };
 
-    Err("unimplemented".to_owned())
+    evaluate_clause(final_node, arena, ctable, ftable)
 }
 
 fn evaluate_exprs(exprs_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<Vec<DynamicType>, String> {
     Err("unimplemented".to_owned())
 }
 
-fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, String> {
-    let mut clause_child_iter = clause_node.children(arena);
-    while let Some(pred_node) = clause_child_iter.nth(2) {
-
+fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
+    let mut node = clause_node;
+    while let Some(pred_node) = node.children(arena).nth(2) {
+        evaluate_pred(pred_node, arena, ctable, ftable)?;
         // Iteratively expand clause
         // Unwrap should never fail here
-        clause_child_iter = clause_node.children(arena).next().unwrap().children(arena);
+        node = node.children(arena).next().unwrap();
     }
 
-    Err("unimplemented".to_owned())
+    let final_node = match node.children(arena).next() {
+        Some(node)  => node,
+        None        => return Err("Invalid AEXPR".to_owned())
+    };
+
+    evaluate_pred(final_node, arena, ctable, ftable)
+}
+
+fn evaluate_pred(pred_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
+    let mut node = pred_node;
+
+    while let Some(aexpr_node) = node.children(arena).nth(2) {
+        // evaluate term_node
+        let aexpr_type = evalueate_aexpr(aexpr_node, arena, ctable, ftable)?;
+
+        node = node.children(arena).next().expect("AEXPR not found in PRED");
+    }
+
+    let final_term_node = match node.children(arena).next() {
+        Some(node)  => node,
+        None        => return Err("Invalid AEXPR".to_owned())
+    };
+
+    evaluate_term(final_term_node, arena, ctable, ftable)?;
+
+    Ok(DynamicType {
+        cur_type: BaseType::Boolean,
+        sub_type: None
+    })
+}
+
+fn evalueate_aexpr(aexpr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
+    let mut node = aexpr_node;
+
+    let mut pre_term_type: Option<DynamicType> = None;
+    while let Some(term_node) = node.children(arena).nth(2) {
+        // evaluate term_node
+        let term_type = evaluate_term(term_node, arena, ctable, ftable)?;
+        pre_term_type = match pre_term_type {
+            Some(pre_type)  => {
+                if pre_type.cur_type == BaseType::Float {
+                    Some(pre_type)
+                } else {
+                    Some(term_type)
+                }
+            },
+            None            => Some(term_type),
+        };
+
+        // iteratively expand aexpr
+        node = node.children(arena).next().expect("TERM not found in AEXPR");
+    }
+
+    let final_term_node = match node.children(arena).next() {
+        Some(node)  => node,
+        None        => return Err("Invalid TERM".to_owned())
+    };
+
+    let final_term_type = evaluate_term(final_term_node, arena, ctable, ftable)?;
+    pre_term_type = match pre_term_type {
+        Some(pre_type)  => {
+            if pre_type.cur_type == BaseType::Float {
+                Some(pre_type)
+            } else {
+                Some(final_term_type)
+            }
+        },
+        None            => Some(final_term_type),
+    };
+
+    Ok(pre_term_type.unwrap())
 }
 
 fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
