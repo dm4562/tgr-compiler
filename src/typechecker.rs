@@ -380,12 +380,16 @@ fn check_return_paths(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Sym
                     None    => {},
                     }
             }
-            "return"    => {
-                let new_ret_type = evaluate_expr(child_node.children(arena).nth(3).unwrap(), arena, ctable, ftable)?;
-                cur_return = match new_ret_type == *ret_type {
-                    true    => Some(new_ret_type),
-                    false   => return Err(format!("the type of a return path of '{}' does not match its definition!", name)),
-                };
+            "fullstmt"    => {
+                if let Some(fullstmt_node) = child_node.children(arena).nth(0)  {
+                    if arena[fullstmt_node].data.val.as_str() != "return" {
+                        let new_ret_type = evaluate_expr(fullstmt_node.children(arena).nth(1).unwrap(), arena, ctable, ftable)?;
+                        cur_return = match new_ret_type == *ret_type {
+                            true    => Some(new_ret_type),
+                            false   => return Err(format!("the type of a return path of '{}' does not match its definition!", name)),
+                        };
+                    }
+                } 
             },
             _       => {},
         }
