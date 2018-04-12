@@ -324,7 +324,7 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
                 None    => return Err(format!("unable to resolve constant '{}' type!", const_token_rc.val))
             };
 
-            if !const_type.eq(&var_type) {
+            if !can_assign_types(&var_type, &const_type) {
                 return Err(format!("type mismatch error!"));
             }
         }
@@ -333,6 +333,10 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
     }
 
     Ok(ctable)
+}
+
+fn can_assign_types(lhs: &DynamicType, rhs: &DynamicType) -> bool {
+    return ((rhs.cur_type == BaseType::Integer || rhs.cur_type == BaseType::Float) && (lhs.cur_type == BaseType::Float)) || lhs == rhs
 }
 
 fn check_funcdecls(funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<(), String> {
@@ -375,37 +379,39 @@ fn check_funcdecl(funcdecl_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symb
 fn check_return_paths(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable, ret_type: &DynamicType, name: &String) -> Result<Option<DynamicType>, String> {
     let mut cur_return: Option<DynamicType> = None;
 
-    for child_node in stmts_node.children(arena) {
-        match arena[child_node].data.val.as_str() {
-            "if"    => {
-                check_return_paths(child_node.children(arena).nth(3).unwrap(), arena, ctable, ftable, ret_type, name)?;
-                // If both 'if' and 'else' parts have a return type, then the whole block has a return value as well
-                match child_node.children(arena).nth(5) {
-                    Some(v) => {
-                        if let Some(ret_type) = check_return_paths(child_node.children(arena).nth(3).unwrap(), arena, ctable, ftable, ret_type, name)? {
-                            cur_return = Some(ret_type);
-                        }
-                    },
-                    None    => {},
+    // let mut child_node = stmts_node.children(arena).nth(0).unwrap().children(arena).nth(0).unwrap();
+    let stmt_node = stmts_node.children(arena).nth(0).unwrap().children(arena).nth(0).unwrap();
+    match arena[stmt_node.children(arena).nth(0).unwrap()].data.val.as_str() {
+        "if"    => {
+            check_return_paths(stmt_node.children(arena).nth(3).unwrap(), arena, ctable, ftable, ret_type, name)?;
+            // If both 'if' and 'else' parts have a return type, then the whole block has a return value as well
+            match stmt_node.children(arena).nth(5) {
+                Some(_) => {
+                    if let Some(ret_type) = check_return_paths(stmt_node.children(arena).nth(3).unwrap(), arena, ctable, ftable, ret_type, name)? {
+                        cur_return = Some(ret_type);
                     }
-            }
-            "fullstmt"    => {
-                if let Some(fullstmt_node) = child_node.children(arena).nth(0)  {
-                    if arena[fullstmt_node].data.val.as_str() != "return" {
-                        let new_ret_type = evaluate_expr(fullstmt_node.children(arena).nth(1).unwrap(), arena, ctable, ftable)?;
-                        cur_return = match new_ret_type == *ret_type {
-                            true    => Some(new_ret_type),
-                            false   => return Err(format!("the type of a return path of '{}' does not match its definition!", name)),
-                        };
-                    }
-                } 
-            },
-            _       => {},
+                },
+                None    => {},
+                }
         }
-    };
+        "return"    => {
+            let rhs_ret_type = evaluate_expr(stmt_node.children(arena).nth(1).unwrap(), arena, ctable, ftable)?;
+            cur_return = match can_assign_types(ret_type, &rhs_ret_type) {
+                true    => Some(rhs_ret_type),
+                false   => return Err(format!("the type of a return path of '{}' does not match its definition!", name)),
+            };
+        },
+        _       => {},
+    }
+    match stmts_node.children(arena).nth(1) {
+        Some(n) => { cur_return = check_return_paths(n, arena, ctable, ftable, ret_type, name)?; },
+        None    => {},
+    }
 
     cur_return.map_or(Err(format!("does not return a value on all code paths!")), |ret| Ok(Some(ret)))
 }
+
+
 
 fn evaluate_id(id_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, String> {
     let id = &*arena[id_node].data.val;
