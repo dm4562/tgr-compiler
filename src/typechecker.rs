@@ -8,7 +8,7 @@ use indexmap::IndexMap;
 
 use scanner::Token;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SymbolTable {
     map: HashMap<String, DynamicType>
 }
@@ -339,6 +339,9 @@ fn check_funcdecls(funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Sy
     let mut node = funcdecls_node;
 
     while let Some(funcdecl_node) = node.children(arena).nth(0) {
+        // Shadow the ctable
+        let mut shadowed_ctable = ctable.clone();
+
         let id_ndx = funcdecl_node.children(arena).nth(1).unwrap();
         let func_name = &*arena[id_ndx].data.val;
 
@@ -347,7 +350,13 @@ fn check_funcdecls(funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Sy
             None    => return Err("Return type not defined".to_owned())
         };
 
-        check_funcdecl(funcdecl_node, arena, ctable, ftable, func_ret_type, func_name)?;
+        // Overwrite shadowed variables
+        let func_map = ftable.map.get(func_name).ok_or("Unable to find function map!")?;
+        for (param_id, param_type) in func_map.iter() {
+            shadowed_ctable.map.insert((**param_id).clone(), param_type.clone());
+        }
+
+        check_funcdecl(funcdecl_node, arena, &shadowed_ctable, ftable, func_ret_type, func_name)?;
 
         node = node.children(arena).nth(1).unwrap();
     }
@@ -399,14 +408,6 @@ fn check_return_paths(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Sym
 }
 
 fn evaluate_id(id_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<DynamicType, String> {
-    // match ftable {
-    //     Some(f) => match f.map.get(key)(id) {
-    //         Some(t)  => return Ok(t),
-    //         None        => {},
-    //     },
-    //     None    => {},
-    // };
-
     let id = &*arena[id_node].data.val;
     match ctable.find(id) {
         Some(t) => Ok(t.clone()),
