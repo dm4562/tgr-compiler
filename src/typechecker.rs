@@ -420,7 +420,10 @@ fn check_stmts(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTabl
         };
 
         check_stmt(stmt_node, arena, ctable, ftable)?;
-        node = node.children(arena).nth(1).unwrap();
+        node = match node.children(arena).nth(1) {
+            Some(n) => n,
+            None    => break
+        };
     }
 
     Ok(())
@@ -487,6 +490,7 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
             //STMT -> LVALUE := EXPR
             let lhs_node = stmt_node.children(arena).nth(0).unwrap();
             let rhs_node = stmt_node.children(arena).nth(2).unwrap();
+            println!("stmt - {:?}", arena[rhs_node].data);
             if evaluate_lvalue(lhs_node, arena, ctable, ftable)? != evaluate_expr(rhs_node, arena, ctable, ftable)? {
                 return Err(format!("type mismatch in assignment statement!"));
             }
@@ -498,8 +502,10 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
 
 fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let mut node = expr_node;
+    println!("expr - {:?}", arena[expr_node].data);
     while let Some(clause_node) = node.children(arena).nth(2) {
         // Evaluate clause node
+
         evaluate_clause(clause_node, arena, ctable, ftable)?;
 
         // Iteratively expand expr
@@ -536,6 +542,7 @@ fn evaluate_exprs(exprs_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolT
 fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let mut node = clause_node;
     let mut flag = false;
+    println!("clause - {:?}", arena[clause_node].data);
     while let Some(pred_node) = node.children(arena).nth(2) {
         flag = true;
         evaluate_pred(pred_node, arena, ctable, ftable)?;
@@ -561,7 +568,7 @@ fn evaluate_clause(clause_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
 
 fn evaluate_pred(pred_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let mut node = pred_node;
-
+    println!("pred - {:?}", arena[pred_node].data);
     let mut flag = false;
     while let Some(aexpr_node) = node.children(arena).nth(2) {
         // evaluate term_node
@@ -588,7 +595,7 @@ fn evaluate_pred(pred_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTab
 
 fn evaluate_aexpr(aexpr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let mut node = aexpr_node;
-
+    println!("aexpr - {:?}", arena[aexpr_node].data);
     let mut pre_term_type: Option<DynamicType> = None;
     while let Some(term_node) = node.children(arena).nth(2) {
         // evaluate term_node
@@ -630,6 +637,7 @@ fn evaluate_aexpr(aexpr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolT
 
 fn evaluate_term(term_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
     let mut curr_term_node = term_node;
+    println!("term - {:?}", arena[term_node].data);
     let mut term_child_iter = curr_term_node.children(arena);
 
     let mut pre_factor_type: Option<DynamicType> = None;
@@ -673,27 +681,37 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
     let factor_child: NodeId = factor_node.children(arena).next().unwrap();
 
     // Check if factor is a constant literal
-    let factor_type = DynamicType::from_const_token(&*(arena[factor_child].data));
-    match factor_type {
-        Some(t) => return Ok(t),
-        None    => {}
-    };
+    if *arena[factor_child].data.val == "const" {
+        let node = factor_child.children(arena).next().unwrap();
+        let factor_type = DynamicType::from_const_token(&*(arena[node].data));
+        println!("factor {:?}", arena[node].data);
+        match factor_type {
+            Some(t) => {
+                println!("XX {:?}", t);
+                return Ok(t)
+            },
+            None    => {}
+        };
+    }
 
     let ret_type: Result<DynamicType, String>;
-    if (*arena[factor_child].data).token_name.eq("identifier") {
+    if (*arena[factor_child].data).token_name.eq("id") {
         // If factor starts with an identifier
-        let id = (*arena[factor_child].data).val.clone();
+        let id_ndx = factor_node.children(arena).nth(0).unwrap();
+        let id: &String = &*arena[id_ndx].data.val.clone();
         let id_type: DynamicType = match ctable.find(&id) {
             Some(t) => t.clone(),
             None    => return Err("Type mismatch error: Type not found".to_owned())
         };
 
-        let bracket_node = match factor_child.following_siblings(arena).next() {
+        let bracket_node: NodeId = match factor_node.children(arena).nth(1) {
+        // let bracket_node = match factor_child.following_siblings(arena).next() {
             Some(bracket)   => bracket,
             None            => return Ok(id_type)
         };
 
-        let e_node = match bracket_node.following_siblings(arena).next() {
+        let e_node = match factor_node.children(arena).nth(2) {
+        // let e_node = match bracket_node.following_siblings(arena).next() {
             Some(node)  => node,
             None        => return Err("expression not found".to_owned())
         };
@@ -701,13 +719,14 @@ fn evaluate_factor(factor_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &Symbo
         ret_type = match &*arena[bracket_node].data.val.as_str() {
             "[" => {
                 // TODO: return the array type
+                println!("factor - array - {:?}", arena[e_node].data);
                 let e_type = evaluate_expr(e_node, arena, ctable, ftable)?;
                 if e_type.cur_type != BaseType::Integer {
                     Err("Type mismatch error: Can only index with Integer".to_owned())
                 } else {
-                    match e_type.sub_type {
+                    match id_type.sub_type {
                         Some(rc_type)   => Ok((**rc_type).clone()),
-                        None            => Err("Type mismatch error".to_owned())
+                        None            => Err("Type mismatch error -  lol".to_owned())
                     }
                 }
             },
