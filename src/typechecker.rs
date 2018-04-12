@@ -259,24 +259,26 @@ fn build_func_context_map(funcdecls_node: NodeId, arena: &Arena<Rc<Token>>, atab
 
         // Create entry in FunctionTable for id
         ftable.map.insert(id.val.clone(), IndexMap::new());
-        let args_map = ftable.map.get_mut(&(*id.val)).unwrap();
+        {
+            let args_map = ftable.map.get_mut(&(*id.val)).unwrap();
 
-        // Insert param types
-        if let Some(neparams_node) = params_iter.next() {
-            let mut neparams_iter = neparams_node.children(arena);
-            while let Some(param_node) = neparams_iter.next() {
-                let param_id_ndx = param_node.children(arena).next().unwrap();
-                let param_id = arena[param_id_ndx].data.clone();
+            // Insert param types
+            if let Some(neparams_node) = params_iter.next() {
+                let mut neparams_iter = neparams_node.children(arena);
+                while let Some(param_node) = neparams_iter.next() {
+                    let param_id_ndx = param_node.children(arena).next().unwrap();
+                    let param_id = arena[param_id_ndx].data.clone();
 
-                let param_type_node = param_node.children(arena).nth(2).unwrap();
-                let param_type = DynamicType::from_tree_node(param_type_node, arena, atable)?;
+                    let param_type_node = param_node.children(arena).nth(2).unwrap();
+                    let param_type = DynamicType::from_tree_node(param_type_node, arena, atable)?;
 
-                args_map.insert(param_id.val.clone(), param_type);
+                    args_map.insert(param_id.val.clone(), param_type);
 
-                neparams_iter = match neparams_iter.next() {
-                    Some(node)  => node.children(arena),
-                    None        => break
-                };
+                    neparams_iter = match neparams_iter.next() {
+                        Some(node)  => node.children(arena),
+                        None        => break
+                    };
+                }
             }
         }
 
@@ -388,6 +390,9 @@ fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTab
 }
 
 fn evaluate_exprs(exprs_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<Vec<DynamicType>, String> {
+
+
+
     Err("unimplemented".to_owned())
 }
 
