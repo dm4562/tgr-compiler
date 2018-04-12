@@ -497,23 +497,17 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
 }
 
 fn evaluate_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
-    let mut node = expr_node;
-    while let Some(clause_node) = node.children(arena).nth(2) {
-        // Evaluate clause node
-        evaluate_clause(clause_node, arena, ctable, ftable)?;
-
-        // Iteratively expand expr
-        // Unwrap should never fail here
-        node = node.children(arena).next().unwrap();
+    match expr_node.children(arena).nth(2) {
+        Some(clause_node)  => {
+            let clause_type = evaluate_clause(clause_node, arena, ctable, ftable)?;
+            let expr_type = evaluate_expr(expr_node.children(arena).nth(0).unwrap(), arena, ctable, ftable)?;
+            match clause_type == expr_type {
+                true    => Ok(expr_type),
+                false   => Err(format!("expression is not well-typed!")),
+            }
+        }
+        None => evaluate_clause(expr_node.children(arena).nth(0).unwrap(), arena, ctable, ftable)
     }
-
-    // Evaluate the last clause node
-    let final_node = match node.children(arena).next() {
-        Some(node)  => node,
-        None        => return Err("Invalid CLAUSE".to_owned())
-    };
-
-    evaluate_clause(final_node, arena, ctable, ftable)
 }
 
 fn evaluate_exprs(exprs_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<Vec<DynamicType>, String> {
