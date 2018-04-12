@@ -6,6 +6,7 @@ extern crate regex;
 
 #[macro_use] extern crate serde_derive;
 extern crate indextree;
+extern crate indexmap;
 
 mod scanner;
 mod parser;
@@ -107,8 +108,10 @@ fn main() {
 
     let (mut arena, mut ast_root) = typechecker::build_ast(&new_ast);
 
-    match typechecker::build_type_maps(&arena, ast_root) {
-        Ok(a)       => print!("{}\n {}", a.0, a.1),
+    typechecker::debug_print_ast(&arena, ast_root);
+
+    match typechecker::check_program(&arena, ast_root) {
+        Ok(a)       => print!(" {}\n {}\n {}", a.0, a.1, a.2),
         Err(msg)    => eprintln!("{}", msg.to_owned())
     };
 }

@@ -188,7 +188,7 @@ pub fn parse_input<'a>(grammar: &Grammar, table: &ParseTable, tokens: &mut VecDe
     Ok((ast, new_ast))
 }
 
-fn get_token_ast_value(token: &Token) -> String {
+pub fn get_token_ast_value(token: &Token) -> String {
     match token.token_name {
         "keyword"   => (*token.val).to_owned(),
         "id"        => (*token.val).to_owned(),
