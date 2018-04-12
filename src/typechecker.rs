@@ -330,12 +330,24 @@ fn build_context_map(vardecls_node: NodeId, funcdecls_node: NodeId, arena: &Aren
         iter = iter.next().expect("Expected VARDECLS").children(arena);
     }
 
-
-
-    // print!("{}", ctable);
     Ok(ctable)
 }
 
+fn check_stmts(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<(), String> {
+    let mut node = stmts_node;
+
+    while let Some(fullstmt_node) = node.children(arena).next() {
+        let stmt_node = match fullstmt_node.children(arena).next() {
+            Some(n) => n,
+            None    => return Err("STMT not found".to_owned())
+        };
+
+        check_stmt(stmt_node, arena, ctable, ftable)?;
+        node = node.children(arena).nth(1).unwrap();
+    }
+
+    Ok(())
+}
 
 /// Checks that all possible executable paths in a function return and return the correct type.
 fn check_return_paths(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable, ret_type: &DynamicType, name: &String) -> Result<Option<DynamicType>, String> {
@@ -385,10 +397,6 @@ fn evaluate_id(id_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) 
     }
 }
 
-fn check_stmts(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) -> Result<(), String> {
-    Ok(())
-}
-
 fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<(), String> {
     fn evaluate_lvalue(lvalue_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<DynamicType, String> {
         let id_node = lvalue_node.children(arena).nth(0).unwrap();
@@ -418,9 +426,9 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
             if evaluate_expr(stmt_node.children(arena).nth(1).unwrap(), arena, ctable, ftable)?.cur_type != BaseType::Boolean {
                 return Err(format!("an if condition must be of type boolean!"));
             }
-            check_stmts(stmt_node.children(arena).nth(3).unwrap(), arena, ctable)?;
+            check_stmts(stmt_node.children(arena).nth(3).unwrap(), arena, ctable, ftable)?;
             match stmt_node.children(arena).nth(5) {
-                Some(else_stmts_node) => { check_stmts(else_stmts_node, arena, ctable)?; },
+                Some(else_stmts_node) => { check_stmts(else_stmts_node, arena, ctable, ftable)?; },
                 None  => {},
             }
         },
@@ -429,7 +437,7 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
             if evaluate_expr(stmt_node.children(arena).nth(1).unwrap(), arena, ctable, ftable)?.cur_type != BaseType::Boolean {
                 return Err(format!("a while condition must be of type boolean!"));
             }
-            check_stmts(stmt_node.children(arena).nth(3).unwrap(), arena, ctable)?;
+            check_stmts(stmt_node.children(arena).nth(3).unwrap(), arena, ctable, ftable)?;
         },
         "for"       => {
             // STMT -> for id := EXPR to EXPR do STMTS enddo
@@ -442,7 +450,7 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
             if evaluate_expr(stmt_node.children(arena).nth(5).unwrap(), arena, ctable, ftable)?.cur_type != BaseType::Integer {
                 return Err(format!("a while condition must be of type boolean!"));
             }
-            check_stmts(stmt_node.children(arena).nth(3).unwrap(), arena, ctable)?;
+            check_stmts(stmt_node.children(arena).nth(3).unwrap(), arena, ctable, ftable)?;
         },
         "break"     => {},
         "return"    => {},
