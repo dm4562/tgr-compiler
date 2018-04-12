@@ -415,6 +415,7 @@ fn evaluate_id(id_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable) 
 }
 
 fn check_stmts(stmts_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable, ftable: &FunctionTable) -> Result<(), String> {
+    println!("stmts: {:?}", arena[stmts_node].data);
     let mut node = stmts_node;
 
     while let Some(fullstmt_node) = node.children(arena).next() {
@@ -453,6 +454,8 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
         }
     }
 
+    println!("stmt1: {:?}", arena[stmt_node].data);
+
     match (*arena[stmt_node.children(arena).nth(0).unwrap()].data.val).as_str() {
         "if"        => {
             /*
@@ -477,7 +480,7 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
         },
         "for"       => {
             // STMT -> for id := EXPR to EXPR do STMTS enddo
-            if evaluate_id(stmt_node.children(arena).nth(0).unwrap(), arena, ctable)?.cur_type != BaseType::Integer {
+            if evaluate_id(stmt_node.children(arena).nth(1).unwrap(), arena, ctable)?.cur_type != BaseType::Integer {
                 return Err(format!("a while condition must be of type boolean!"));
             }
             if evaluate_expr(stmt_node.children(arena).nth(3).unwrap(), arena, ctable, ftable)?.cur_type != BaseType::Integer {
@@ -486,15 +489,15 @@ fn check_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolTable,
             if evaluate_expr(stmt_node.children(arena).nth(5).unwrap(), arena, ctable, ftable)?.cur_type != BaseType::Integer {
                 return Err(format!("a while condition must be of type boolean!"));
             }
-            check_stmts(stmt_node.children(arena).nth(3).unwrap(), arena, ctable, ftable)?;
+            check_stmts(stmt_node.children(arena).nth(7).unwrap(), arena, ctable, ftable)?;
         },
         "break"     => {},
         "return"    => {},
         _           => {
             //STMT -> LVALUE := EXPR
+            println!("stmt: {:?}", arena[stmt_node.children(arena).nth(0).unwrap()].data);
             let lhs_node = stmt_node.children(arena).nth(0).unwrap();
             let rhs_node = stmt_node.children(arena).nth(2).unwrap();
-            println!("{:?}", arena[rhs_node].data);
             for child in rhs_node.children(arena) {
                 println!("--{:?}", arena[child].data);
             }
@@ -534,7 +537,12 @@ fn evaluate_exprs(exprs_node: NodeId, arena: &Arena<Rc<Token>>, ctable: &SymbolT
         let expr_type = evaluate_expr(expr_node, arena, ctable, ftable)?;
         result.push(expr_type);
         // Iterate over neexprs
-        neexprs_node = neexprs_node.children(arena).nth(2).unwrap();
+        println!("exprs1: {:?}", neexprs_node.children(arena).count());
+        neexprs_node = match neexprs_node.children(arena).nth(2) {
+            Some(n) => n,
+            None    => break
+        };
+        println!("exprs: {:?}", arena[neexprs_node].data);
     }
 
     Ok(result)
