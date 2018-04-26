@@ -1,3 +1,4 @@
+use indexmap::{IndexMap, IndexSet};
 use indextree::{Arena, NodeId};
 use petgraph as pg;
 use std::collections::{HashMap, HashSet};
@@ -92,7 +93,7 @@ fn analyze_cfg(cfg: &ControlFlowGraph, root_node: pg::graph::NodeIndex) {
     // Maps a variable name to the next available id
     let mut id_map = HashMap::<Rc<String>, u64>::new();
     // Maps whether a certain OptimizerToken has been used
-    let mut used_map = HashMap::<OptimizerToken, bool>::new();
+    let mut used_map = IndexMap::<OptimizerToken, bool>::new();
     // Maps an OptimizerToken to where it was defined
     let mut creation_map = HashMap::<OptimizerToken, Rc<Statement>>::new();
 
@@ -106,7 +107,7 @@ fn analyze_cfg(cfg: &ControlFlowGraph, root_node: pg::graph::NodeIndex) {
     let dead_code = find_dead_code(&used_map, &creation_map);
 }
 
-fn traverse_cfg(cfg: &ControlFlowGraph, node: pg::graph::NodeIndex, gen_map: &mut HashMap<Rc<BasicBlock>, HashSet<Rc<Expression>>>, mut token_map: HashMap<Rc<String>, OptimizerToken>, id_map: &mut HashMap<Rc<String>, u64>, used_map: &mut HashMap<OptimizerToken, bool>, creation_map: &mut HashMap<OptimizerToken, Rc<Statement>>, mut visited: HashSet<pg::graph::NodeIndex>) {
+fn traverse_cfg(cfg: &ControlFlowGraph, node: pg::graph::NodeIndex, gen_map: &mut HashMap<Rc<BasicBlock>, HashSet<Rc<Expression>>>, mut token_map: HashMap<Rc<String>, OptimizerToken>, id_map: &mut HashMap<Rc<String>, u64>, used_map: &mut IndexMap<OptimizerToken, bool>, creation_map: &mut HashMap<OptimizerToken, Rc<Statement>>, mut visited: HashSet<pg::graph::NodeIndex>) {
     let mut expressions = HashSet::<Rc<Expression>>::new();
     let block = cfg.node_weight(node).unwrap();
 
@@ -183,8 +184,8 @@ fn traverse_cfg(cfg: &ControlFlowGraph, node: pg::graph::NodeIndex, gen_map: &mu
     }
 }
 
-fn find_dead_code(used_map: &HashMap<OptimizerToken, bool>, creation_map: &HashMap<OptimizerToken, Rc<Statement>>) -> HashSet<Rc<Statement>> {
-    let mut result = HashSet::<Rc<Statement>>::new();
+fn find_dead_code(used_map: &IndexMap<OptimizerToken, bool>, creation_map: &HashMap<OptimizerToken, Rc<Statement>>) -> IndexSet<Rc<Statement>> {
+    let mut result = IndexSet::<Rc<Statement>>::new();
 
     for (token, is_used) in used_map {
         if !is_used {
