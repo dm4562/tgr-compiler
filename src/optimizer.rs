@@ -9,15 +9,21 @@ use scanner::Token;
 type ControlFlowGraph = Graph<BasicBlock, ()>;
 
 #[derive(Debug, Hash)]
-struct SubVariable {
+enum OptimizerTokenType {
+    Variable,
+    Operator
+}
+
+#[derive(Debug, Hash)]
+struct OptimizerToken {
     name: Rc<String>,
     num: u64,
+    token_type: OptimizerTokenType
 }
 
 struct Statement {
-    assigned: Option<Rc<String>>, // the LVALUE (if there is one)
-    used: Vec<Rc<String>>, // the variables used in the RHS
-    code: Rc<String>, // original code
+    lhs: Option<OptimizerToken>, // the LVALUE (if there is one)
+    rhs: Vec<OptimizerToken>, // the variables used in the RHS
     node: NodeId
 }
 
@@ -47,6 +53,13 @@ impl Hash for BasicBlock {
     }
 }
 
+impl PartialEq for BasicBlock {
+    fn eq(&self, other: &BasicBlock) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for BasicBlock {}
+
 pub fn optimize(arena: &Arena<Rc<Token>>, program_node: NodeId) -> Result<(), String> {
     // Get declseg node
     let declseg_node = program_node.children(arena).nth(1).unwrap();
@@ -64,5 +77,7 @@ fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) {
 
 
 fn analyze_cfg(cfg: &ControlFlowGraph) {
+    let mut avail_map = HashMap::<BasicBlock, Vec<OptimizerToken>>::new();
+    let mut intermediate_map = HashMap::<Rc<String>, OptimizerToken>::new();
     
 }
