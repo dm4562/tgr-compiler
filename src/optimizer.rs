@@ -1,11 +1,15 @@
 use indextree::{Arena, NodeId};
-use std::rc::Rc;
 use petgraph::graph::{Graph};
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 
 use scanner::Token;
 
+type ControlFlowGraph = Graph<BasicBlock, ()>;
+
 #[derive(Debug, Hash)]
-struct Subvariable {
+struct SubVariable {
     name: Rc<String>,
     num: usize,
 }
@@ -15,6 +19,12 @@ struct Statement {
     used: Vec<Rc<String>>, // the variables used in the RHS
     code: Rc<String>, // original code
     node: NodeId
+}
+
+impl Hash for Statement {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.node.hash(state);
+    }
 }
 
 struct BasicBlock {
@@ -44,5 +54,10 @@ fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) {
     let mut cfg = Graph::<BasicBlock, ()>::new();
     let mut cur_block = cfg.add_node(BasicBlock::new());
     
+
+}
+
+
+fn find_dead_code(cfg: &ControlFlowGraph) {
 
 }
