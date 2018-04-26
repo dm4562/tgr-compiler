@@ -11,7 +11,7 @@ type ControlFlowGraph = Graph<BasicBlock, ()>;
 #[derive(Debug, Hash)]
 struct SubVariable {
     name: Rc<String>,
-    num: usize,
+    num: u64,
 }
 
 struct Statement {
@@ -28,14 +28,22 @@ impl Hash for Statement {
 }
 
 struct BasicBlock {
-    statements: Vec<Statement>
+    statements: Vec<Statement>,
+    id: u64
 }
 
 impl BasicBlock {
-    pub fn new() -> BasicBlock {
+    pub fn new(id: u64) -> BasicBlock {
         BasicBlock {
-            statements: Vec::new()
+            statements: Vec::new(),
+            id: id
         }
+    }
+}
+
+impl Hash for BasicBlock {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }
 
@@ -51,13 +59,10 @@ pub fn optimize(arena: &Arena<Rc<Token>>, program_node: NodeId) -> Result<(), St
 
 
 fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) {
-    let mut cfg = Graph::<BasicBlock, ()>::new();
-    let mut cur_block = cfg.add_node(BasicBlock::new());
-    
-
+    let mut cfg = ControlFlowGraph::new();    
 }
 
 
-fn find_dead_code(cfg: &ControlFlowGraph) {
-
+fn analyze_cfg(cfg: &ControlFlowGraph) {
+    
 }
