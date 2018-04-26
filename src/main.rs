@@ -3,6 +3,7 @@ extern crate env_logger;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
 extern crate regex;
+extern crate petgraph;
 
 #[macro_use] extern crate serde_derive;
 extern crate indextree;
@@ -11,6 +12,7 @@ extern crate indexmap;
 mod scanner;
 mod parser;
 mod typechecker;
+mod optimizer;
 
 use clap::{Arg, App};
 use regex::Regex;
