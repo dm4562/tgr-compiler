@@ -21,6 +21,7 @@ struct OptimizerToken {
     token_type: OptimizerTokenType
 }
 
+#[derive(Debug)]
 struct Statement {
     lhs: Option<OptimizerToken>, // the LVALUE (if there is one)
     rhs: Vec<OptimizerToken>, // the variables used in the RHS
@@ -65,19 +66,26 @@ pub fn optimize(arena: &Arena<Rc<Token>>, program_node: NodeId) -> Result<(), St
     let declseg_node = program_node.children(arena).nth(1).unwrap();
 
     // Get program body
-    let program_body = program_node.children(arena).nth(3).unwrap(); 
+    let program_body = program_node.children(arena).nth(3).unwrap();
 
     Ok(())
 }
 
 
 fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) {
-    let mut cfg = ControlFlowGraph::new();    
+    let mut cfg = ControlFlowGraph::new();
 }
 
 
 fn analyze_cfg(cfg: &ControlFlowGraph) {
     let mut avail_map = HashMap::<BasicBlock, Vec<OptimizerToken>>::new();
     let mut intermediate_map = HashMap::<Rc<String>, OptimizerToken>::new();
-    
+
+
+}
+
+
+fn build_typedecl(typedecl_node: NodeId, arena: &Arena<Rc<Token>>, counter: u64) {
+    let mut block = BasicBlock::new(counter);
+
 }
