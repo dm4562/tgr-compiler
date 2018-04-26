@@ -7,14 +7,15 @@ use std::rc::Rc;
 use scanner::Token;
 
 type ControlFlowGraph = Graph<BasicBlock, ()>;
+type Expression = Vec<OptimizerToken>;
 
-#[derive(Debug, Hash)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 enum OptimizerTokenType {
     Variable,
     Operator
 }
 
-#[derive(Debug, Hash)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 struct OptimizerToken {
     name: Rc<String>,
     num: u64,
@@ -23,7 +24,7 @@ struct OptimizerToken {
 
 struct Statement {
     lhs: Option<OptimizerToken>, // the LVALUE (if there is one)
-    rhs: Vec<OptimizerToken>, // the variables used in the RHS
+    rhs: Expression, // the variables used in the RHS
     node: NodeId
 }
 
@@ -77,7 +78,12 @@ fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) {
 
 
 fn analyze_cfg(cfg: &ControlFlowGraph) {
-    let mut avail_map = HashMap::<BasicBlock, Vec<OptimizerToken>>::new();
+    // The expressions generated in a BasicBlock
+    let mut gen_map = HashMap::<BasicBlock, Vec<Expression>>::new();
+    // Maps a variable name to its current OptimizerToken
     let mut intermediate_map = HashMap::<Rc<String>, OptimizerToken>::new();
-    
+    // Maps whether a certain OptimizerToken has been used
+    let mut used_map = HashMap::<OptimizerToken, bool>::new();
+    // Maps an OptimizerToken to where it was defined
+    let mut creation_map = HashMap::<OptimizerToken, Expression>::new();
 }
