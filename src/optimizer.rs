@@ -84,11 +84,13 @@ struct BasicBlock {
 }
 
 impl BasicBlock {
-    pub fn new(id: u64) -> BasicBlock {
-        BasicBlock {
+    pub fn new(id: &mut u64) -> BasicBlock {
+        let b = BasicBlock {
             statements: Vec::new(),
-            id: id
-        }
+            id: *id
+        };
+        *id += 1;
+        b
     }
 }
 
@@ -108,7 +110,7 @@ impl Eq for BasicBlock {}
 
 impl fmt::Display for BasicBlock {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[ id: {} ", self.id);
+        write!(f, "[ id: {}\t", self.id);
         write!(f, "statements: ");
         for stmt in &self.statements {
             write!(f, "{}, ", stmt);
@@ -146,14 +148,19 @@ pub fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) {
     let typedecls_ndx = cfg.add_node(RefCell::new(typedecls_block));
     let last_vardecls_ndx = add_vardecls_blocks(vardecls_node, arena, &mut block_count, &mut cfg, typedecls_ndx);
 
-    block_count += 1;
-    let stmt_block = BasicBlock::new(block_count);
+    let stmt_block = BasicBlock::new(&mut block_count);
     let stmt_block_ndx = cfg.add_node(RefCell::new(stmt_block));
     cfg.add_edge(last_vardecls_ndx, stmt_block_ndx, ());
     let outgoing_nodes = build_stmts(stmts_node, arena, &mut cfg, stmt_block_ndx, &mut block_count);
 
     if outgoing_nodes.len() > 0 {
-        print!("LENGTH > 0");
+        // Create a new empty last block
+        println!("MANY OUTGOING");
+        let last = BasicBlock::new(&mut block_count);
+        let last_ndx = cfg.add_node(RefCell::new(last));
+        for n in outgoing_nodes.iter() {
+            cfg.add_edge(*n, last_ndx, ());
+        }
     }
 
     println!("{:?}", Dot::with_config(&cfg, &[Config::EdgeNoLabel]));
@@ -164,14 +171,11 @@ fn analyze_cfg(cfg: &ControlFlowGraph) {
     let mut avail_map = HashMap::<BasicBlock, Vec<OptimizerToken>>::new();
     let mut intermediate_map = HashMap::<Rc<String>, OptimizerToken>::new();
 
-
-
 }
 
 fn build_typedecls(typedecls_node: NodeId, arena: &Arena<Rc<Token>>, counter: &mut u64) -> BasicBlock {
     let mut node = typedecls_node;
-    *counter += 1;
-    let mut block = BasicBlock::new(*counter);
+    let mut block = BasicBlock::new(counter);
 
     while let Some(typedecl_node) = node.children(arena).nth(0) {
         let statement = build_typedecl_statement(typedecl_node, arena);
@@ -220,8 +224,7 @@ fn build_vardecl_block(vardecl: NodeId, arena: &Arena<Rc<Token>>, counter: &mut 
         None => None
     };
 
-    *counter += 1;
-    let mut block = BasicBlock::new(*counter);
+    let mut block = BasicBlock::new(counter);
     let mut ids_node = vardecl.children(arena).nth(1).unwrap();
     while let Some(id_node) = ids_node.children(arena).nth(0) {
         let id = (arena[id_node].data).val.clone();
@@ -262,8 +265,7 @@ fn build_stmts(stmts: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowG
     let mut outgoing_nodes = build_stmt(stmt_node, arena, graph, block_ndx, counter);
     if let Some(stmts_node) = stmts.children(arena).nth(1) {
         if outgoing_nodes.len() > 0 {
-            *counter += 1;
-            let block = BasicBlock::new(*counter);
+            let block = BasicBlock::new(counter);
             let bi = graph.add_node(RefCell::new(block));
             for outgoing_node in outgoing_nodes {
                 graph.add_edge(outgoing_node, bi, ());
@@ -307,8 +309,37 @@ fn build_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFl
     } else {
         let first_word = (arena[first_node].data).val.clone();
         if *first_word == "if" {
-            // let exp
+            // let expr
+            let mut outgoing_nodes: Vec<NodeIndex> = Vec::new();
 
+            // Deal with EXPR
+            let expr_node = stmt_node.children(arena).nth(1).expect("EXPR not found");
+            let mut expr_block = BasicBlock::new(counter);
+            let rhs = parse_expr(expr_node, arena);
+            let expr_stmt = Statement { lhs: None, rhs: Some(rhs), node: expr_node };
+            expr_block.statements.push(Rc::new(expr_stmt));
+            let expr_block_ndx = graph.add_node(RefCell::new(expr_block));
+            graph.add_edge(block_ndx, expr_block_ndx, ());
+
+            // Deal with if STMTS
+            let if_stmts_node = stmt_node.children(arena).nth(3).expect("if STMTS not found");
+            let if_stmts_block = BasicBlock::new(counter);
+            let if_stmts_block_ndx = graph.add_node(RefCell::new(if_stmts_block));
+            graph.add_edge(expr_block_ndx, if_stmts_block_ndx, ());
+            outgoing_nodes.append(&mut build_stmts(if_stmts_node, arena, graph, if_stmts_block_ndx, counter));
+
+            // Check if else exists
+            if let Some(else_stmts_node) = stmt_node.children(arena).nth(5) {
+                // Deal with else
+                let else_stmts_block = BasicBlock::new(counter);
+                let else_stmts_block_ndx = graph.add_node(RefCell::new(else_stmts_block));
+                graph.add_edge(expr_block_ndx, else_stmts_block_ndx, ());
+                outgoing_nodes.append(&mut build_stmts(else_stmts_node, arena, graph, else_stmts_block_ndx, counter));
+            } else {
+                outgoing_nodes.push(expr_block_ndx);
+            }
+
+            return outgoing_nodes;
         } else if *first_word == "while" {
 
         } else if *first_word == "for" {
