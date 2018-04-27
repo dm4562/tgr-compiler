@@ -13,6 +13,7 @@ mod scanner;
 mod parser;
 mod typechecker;
 mod optimizer;
+mod cfg;
 
 use clap::{Arg, App};
 use regex::Regex;
@@ -97,7 +98,7 @@ fn main() {
     debug!("{}", grammar);
 
     // Run the parser
-    let (mut ast, mut new_ast) = match parser::parse_input(&grammar, &table, &mut tokens) {
+    let (_ast, new_ast) = match parser::parse_input(&grammar, &table, &mut tokens) {
         Ok((ast, nast)) => {
             info!("Successfully parsed the program");
             if matches.is_present("ast") {
@@ -108,12 +109,12 @@ fn main() {
         Err(msg) => { eprintln!("Parse error: {}", msg); process::exit(1); }
     };
 
-    let (mut arena, mut ast_root) = typechecker::build_ast(&new_ast);
-
-    // typechecker::debug_print_ast(&arena, ast_root);
+    let (arena, ast_root) = typechecker::build_ast(&new_ast);
 
     match typechecker::check_program(&arena, ast_root) {
         Ok(a)       => debug!(" {}\n {}\n {}", a.0, a.1, a.2),
         Err(msg)    => eprintln!("{}", msg.to_owned())
     };
+
+    cfg::build_cfg(&arena, ast_root);
 }
