@@ -29,7 +29,7 @@ enum StmtsScope {
     Function
 }
 
-pub fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) {
+pub fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) -> (NodeIndex, ControlFlowGraph) {
     let mut cfg = ControlFlowGraph::new();
     let mut block_count = 0;
     let declseg_node = root_node.children(arena).nth(1).unwrap();
@@ -61,6 +61,8 @@ pub fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) {
     }
 
     println!("{:?}", Dot::with_config(&cfg, &[Config::EdgeNoLabel]));
+
+    (typedecls_ndx, cfg)
 }
 
 
