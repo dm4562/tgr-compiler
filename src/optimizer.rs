@@ -175,7 +175,9 @@ pub fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) {
     // let outgoing_nodes = build_stmts(stmts_node, arena, &mut cfg, stmt_block_ndx, &mut block_count);
 
     let incoming = vec![last_vardecls_ndx];
-    let outgoing_nodes = build_stmts(stmts_node, arena, &mut cfg, &incoming, &mut block_count, StmtsScope::Program);
+    let mut scopes = vec![StmtsScope::Program];
+    let outgoing_nodes = build_stmts(stmts_node, arena, &mut cfg, &incoming, &mut block_count, &mut scopes);
+    scopes.pop();
     if outgoing_nodes.len() > 0 {
         // Create a new empty last block
         println!("MANY OUTGOING");
@@ -280,38 +282,51 @@ fn build_vardecl_block(vardecl: NodeId, arena: &Arena<Rc<Token>>, counter: &mut 
     block
 }
 
-
-fn build_stmts(stmts: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64, scope: StmtsScope) -> Vec<NodeIndex> {
+fn build_stmts(stmts: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64, scopes: &mut Vec<StmtsScope>) -> Vec<NodeIndex> {
     let node = stmts;
     let fullstmt_node = node.children(arena).nth(0).unwrap();
     let stmt_node = fullstmt_node.children(arena).nth(0).unwrap();
 
-    let (mut outgoing, stmt_type) = build_stmt(stmt_node, arena, graph, incoming, counter);
+    let (stmt_outgoing, stmt_type) = build_stmt(stmt_node, arena, graph, incoming, counter, scopes);
+    let mut outgoing= Vec::new();
+    println!("scope: {:?} | stmt: {:?}", scopes, &stmt_type);
     if let Some(stmts_node) = stmts.children(arena).nth(1) {
-        println!("outgoing: {:?} - for {:?}", outgoing, *arena[stmt_node.children(arena).next().unwrap()].data.val);
+        println!("stmt_outgoing: {:?} - for {:?}", stmt_outgoing, *arena[stmt_node.children(arena).next().unwrap()].data.val);
 
         if stmt_type == StmtType::Break &&
-            (scope == StmtsScope::For || scope == StmtsScope::While) {
-
+            (scopes.contains(&StmtsScope::For) || scopes.contains(&StmtsScope::While)) {
+            println!("FOR WHILE CONDITION");
         } else {
-            outgoing = build_stmts(stmts_node, arena, graph, &outgoing, counter, scope);
+
+            let mut stmts_incoming: Vec<NodeIndex> = Vec::new();
+            for n in &stmt_outgoing {
+                let is_break = is_keyword(*n, graph, &"break".to_owned());
+                if is_break && (scopes.contains(&StmtsScope::For) || scopes.contains(&StmtsScope::While)) {
+                    outgoing.push(*n);
+                } else {
+                    stmts_incoming.push(*n);
+                }
+            }
+
+            outgoing.append(&mut build_stmts(stmts_node, arena, graph, &stmts_incoming, counter, scopes));
         }
+
     }
 
     outgoing
 }
 
-fn build_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64) -> (Vec<NodeIndex>, StmtType) {
+fn build_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64, scopes: &mut Vec<StmtsScope>) -> (Vec<NodeIndex>, StmtType) {
     let first_node = stmt_node.children(arena).nth(0).unwrap();
     if first_node.children(arena).nth(0).is_some() {
         // LVALUE := EXPR (add to block and parse expr)
-        return build_lvalue_stmt(stmt_node, arena, graph, incoming, counter);
+        return build_lvalue_stmt(stmt_node, arena, graph, incoming, counter, scopes);
     } else {
         let first_word = (arena[first_node].data).val.clone();
         if *first_word == "if" {
-            return build_if_stmt(stmt_node, arena, graph, incoming, counter);
+            return build_if_stmt(stmt_node, arena, graph, incoming, counter, scopes);
         } else if *first_word == "while" {
-            return build_while_stmt(stmt_node, arena, graph, incoming, counter);
+            return build_while_stmt(stmt_node, arena, graph, incoming, counter, scopes);
         } else if *first_word == "for" {
 
         } else if *first_word == "break" {
@@ -334,9 +349,7 @@ fn build_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFl
     unimplemented!();
 }
 
-
-
-fn build_while_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64) -> (Vec<NodeIndex>, StmtType) {
+fn build_while_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64, scopes: &mut Vec<StmtsScope>) -> (Vec<NodeIndex>, StmtType) {
 
     let expr_node = stmt_node.children(arena).nth(1).expect("while EXPR not found");
     let rhs = parse_expr(expr_node, arena);
@@ -353,18 +366,26 @@ fn build_while_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut Con
     let stmts_node = stmt_node.children(arena).nth(3).expect("while STMTS not found");
 
     // Check if contains break
-    let while_outgoing = build_stmts(stmts_node, arena, graph, &stmts_incoming, counter, StmtsScope::While);
-
-    for n in &while_outgoing {
-        graph.add_edge(*n, expr_block_ndx, ());
+    scopes.push(StmtsScope::While);
+    let stmts_outgoing = build_stmts(stmts_node, arena, graph, &stmts_incoming, counter, scopes);
+    scopes.pop();
+    let mut outgoing = vec![expr_block_ndx];
+    for n in &stmts_outgoing {
+        let is_break: bool = is_keyword(*n, graph, &"break".to_owned());
+        if is_break {
+            outgoing.push(*n);
+        } else {
+            graph.add_edge(*n, expr_block_ndx, ());
+        }
     }
 
-    (vec![expr_block_ndx], StmtType::While)
+    (outgoing, StmtType::While)
 }
 
-fn build_if_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64) -> (Vec<NodeIndex>, StmtType) {
+fn build_if_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64, scopes: &mut Vec<StmtsScope>) -> (Vec<NodeIndex>, StmtType) {
     // let expr
     let mut outgoing_nodes: Vec<NodeIndex> = Vec::new();
+    debug_print_nodes(incoming, graph);
 
     // Deal with EXPR
     let expr_node = stmt_node.children(arena).nth(1).expect("EXPR not found");
@@ -381,7 +402,9 @@ fn build_if_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut Contro
     // Deal with if STMTS
     let if_incoming = vec![expr_block_ndx];
     let if_stmts_node = stmt_node.children(arena).nth(3).expect("if STMTS not found");
-    let mut if_outgoing = build_stmts(if_stmts_node, arena, graph, &if_incoming, counter, StmtsScope::If);
+    scopes.push(StmtsScope::If);
+    let mut if_outgoing = build_stmts(if_stmts_node, arena, graph, &if_incoming, counter, scopes);
+    scopes.pop();
     println!("if outgoing: {:?}", if_outgoing);
     outgoing_nodes.append(&mut if_outgoing);
     let ret_type;
@@ -389,7 +412,9 @@ fn build_if_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut Contro
     if let Some(else_stmts_node) = stmt_node.children(arena).nth(5) {
         // Deal with else
         let else_incoming = vec![expr_block_ndx];
-        let mut else_outgoing = build_stmts(else_stmts_node, arena, graph, &else_incoming, counter, StmtsScope::Else);
+        scopes.push(StmtsScope::Else);
+        let mut else_outgoing = build_stmts(else_stmts_node, arena, graph, &else_incoming, counter, scopes);
+        scopes.pop();
         println!("else outgoing: {:?}", else_outgoing);
         outgoing_nodes.append(&mut else_outgoing);
         ret_type = StmtType::IfElse;
@@ -402,7 +427,7 @@ fn build_if_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut Contro
     (outgoing_nodes, ret_type)
 }
 
-fn build_lvalue_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64) -> (Vec<NodeIndex>, StmtType) {
+fn build_lvalue_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64, scopes: &Vec<StmtsScope>) -> (Vec<NodeIndex>, StmtType) {
     let first_node = stmt_node.children(arena).nth(0).unwrap();
     let id_node = first_node.children(arena).nth(0).unwrap();
     let token = OptimizerToken {
@@ -430,126 +455,20 @@ fn build_lvalue_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut Co
 
     (vec![bi], StmtType::Lvalue)
 }
-// fn build_stmts(stmts: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, block_ndx: NodeIndex, counter: &mut u64) -> Vec<NodeIndex> {
-//     let mut node = stmts;
-//     let fullstmt_node = node.children(arena).nth(0).unwrap();
-//     let stmt_node = fullstmt_node.children(arena).nth(0).unwrap();
 
-//     let mut outgoing_nodes = build_stmt(stmt_node, arena, graph, block_ndx, counter);
-//     if let Some(stmts_node) = stmts.children(arena).nth(1) {
-//         println!("outgoing: {:?} - for {:?}", outgoing_nodes, *arena[stmt_node.children(arena).next().unwrap()].data.val);
-//         if outgoing_nodes.len() > 0 {
-//             let block = BasicBlock::new(counter);
-//             let bi = graph.add_node(RefCell::new(block));
-//             for outgoing_node in outgoing_nodes {
-//                 // println!("IN outgoing - {:?}", outgoing_node);
-//                 graph.add_edge(outgoing_node, bi, ());
-//             }
-//             outgoing_nodes = build_stmts(stmts_node, arena, graph, bi, counter);
-//         } else {
-//             outgoing_nodes = build_stmts(stmts_node, arena, graph, block_ndx, counter);
-//         }
-//     }
-
-//     outgoing_nodes
-// }
-
-// fn build_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, block_ndx: NodeIndex, counter: &mut u64) -> Vec<NodeIndex> {
-//     let first_node = stmt_node.children(arena).nth(0).unwrap();
-
-
-//     if first_node.children(arena).nth(0).is_some() {
-//         // LVALUE := EXPR (add to block and parse expr)
-//         let id_node = first_node.children(arena).nth(0).unwrap();
-//         let token = OptimizerToken {
-//             name: (arena[id_node].data).val.clone(),
-//             token_type: OptimizerTokenType::Variable,
-//             num: 0
-//         };
-
-//         let expr_node = stmt_node.children(arena).nth(2).unwrap();
-//         let rhs = parse_expr(expr_node, arena);
-
-//         let stmt = Statement {
-//             lhs: Some(token),
-//             rhs: Some(rhs),
-//             node: stmt_node
-//         };
-
-//         if let Some(block) = graph.node_weight_mut(block_ndx) {
-//             // print!("{:?}", *block);
-//             block.borrow_mut().statements.push(Rc::new(stmt));
-//         }
-//         // block.statements.push(Rc::new(stmt));
-
-//         return vec![];
-//     } else {
-//         let first_word = (arena[first_node].data).val.clone();
-//         if *first_word == "if" {
-//             // let expr
-//             let mut outgoing_nodes: Vec<NodeIndex> = Vec::new();
-
-//             // Deal with EXPR
-//             let expr_node = stmt_node.children(arena).nth(1).expect("EXPR not found");
-//             let rhs = parse_expr(expr_node, arena);
-//             let expr_stmt = Statement { lhs: None, rhs: Some(rhs), node: expr_node };
-//             let expr_block_ndx: NodeIndex;
-
-//             if graph.node_weight_mut(block_ndx).expect("Expect block").borrow_mut().statements.len() == 0 {
-//                 graph.node_weight_mut(block_ndx).expect("Expect block").borrow_mut().statements.push(Rc::new(expr_stmt));
-//                 expr_block_ndx = block_ndx;
-//                 println!("IN HERE - {}", graph.node_weight_mut(block_ndx).expect("Expect block").borrow_mut());
-//             } else {
-//                 let mut expr_block = BasicBlock::new(counter);
-//                 expr_block.statements.push(Rc::new(expr_stmt));
-//                 println!("IN HERE 2 - {}", expr_block);
-//                 expr_block_ndx = graph.add_node(RefCell::new(expr_block));
-//                 graph.add_edge(block_ndx, expr_block_ndx, ());
-//             }
-
-//             // let mut expr_block = BasicBlock::new(counter);
-//             // expr_block.statements.push(Rc::new(expr_stmt));
-//             // expr_block_ndx = graph.add_node(RefCell::new(expr_block));
-//             // graph.add_edge(block_ndx, expr_block_ndx, ());
-
-//             // Deal with if STMTS
-//             let if_stmts_node = stmt_node.children(arena).nth(3).expect("if STMTS not found");
-//             let if_stmts_block = BasicBlock::new(counter);
-//             let if_stmts_block_ndx = graph.add_node(RefCell::new(if_stmts_block));
-//             graph.add_edge(expr_block_ndx, if_stmts_block_ndx, ());
-//             let mut if_outgoing = build_stmts(if_stmts_node, arena, graph, if_stmts_block_ndx, counter);
-//             println!("if outgoing: {:?}", if_outgoing);
-//             outgoing_nodes.append(&mut if_outgoing);
-//             outgoing_nodes.push(if_stmts_block_ndx);
-
-//             // Check if else exists
-//             if let Some(else_stmts_node) = stmt_node.children(arena).nth(5) {
-//                 // Deal with else
-//                 let else_stmts_block = BasicBlock::new(counter);
-//                 let else_stmts_block_ndx = graph.add_node(RefCell::new(else_stmts_block));
-//                 graph.add_edge(expr_block_ndx, else_stmts_block_ndx, ());
-//                 let mut else_outgoing = build_stmts(else_stmts_node, arena, graph, else_stmts_block_ndx, counter);
-//                 println!("else outgoing: {:?}", else_outgoing);
-//                 outgoing_nodes.append(&mut else_outgoing);
-//                 outgoing_nodes.push(else_stmts_block_ndx);
-//             } else {
-//                 outgoing_nodes.push(expr_block_ndx);
-//             }
-
-//              println!("final outgoing: {:?}", outgoing_nodes);
-//             return outgoing_nodes;
-//         } else if *first_word == "while" {
-
-//         } else if *first_word == "for" {
-
-//         } else if *first_word == "break" {
-
-//         } else {
-//             // return
-//         }
-//     }
-//     vec![]
-// }
+fn is_keyword(node: NodeIndex, graph: &ControlFlowGraph, k: &String) -> bool {
+    let found = match graph[node].borrow().statements.iter().next() {
+        Some(statement_rc)      => match statement_rc.clone().rhs {
+            Some(ref token_vec) => match token_vec.iter().next() {
+                Some(token)     => *token.name == k.to_owned(),
+                None            => false
+            },
+            None                => false
+        },
+        None                    => false
+    };
+    found
+}
 
 fn parse_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>) -> Vec<OptimizerToken> {
     let mut rhs = Vec::new();
@@ -576,4 +495,10 @@ fn parse_expr(expr_node: NodeId, arena: &Arena<Rc<Token>>) -> Vec<OptimizerToken
     }
 
     rhs
+}
+
+fn debug_print_nodes(vec: &Vec<NodeIndex>, graph: &ControlFlowGraph) {
+    for n in vec {
+        println!("{:?}", graph[*n].borrow());
+    }
 }
