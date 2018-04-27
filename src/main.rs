@@ -116,5 +116,5 @@ fn main() {
         Err(msg)    => eprintln!("{}", msg.to_owned())
     };
 
-    cfg::build_cfg(&arena, ast_root);
+    optimizer::optimize(&arena, ast_root).unwrap();
 }

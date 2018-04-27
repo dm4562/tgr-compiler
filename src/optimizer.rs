@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use std::fmt;
 
 use scanner::Token;
+use cfg;
 
 pub type ControlFlowGraph = pg::graph::Graph<RefCell<BasicBlock>, ()>;
 pub type Expression = Vec<OptimizerToken>;
@@ -135,22 +136,12 @@ impl fmt::Debug for BasicBlock {
 }
 
 pub fn optimize(arena: &Arena<Rc<Token>>, program_node: NodeId) -> Result<(), String> {
-    // Get declseg node
-    let declseg_node = program_node.children(arena).nth(1).unwrap();
-
-    // Get program body
-    let program_body = program_node.children(arena).nth(3).unwrap();
+    let (cfg_root, control) = cfg::build_cfg(arena, program_node);
 
     Ok(())
 }
 
-
-fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) {
-    let mut cfg = ControlFlowGraph::new();    
-}
-
-
-fn analyze_cfg(cfg: &ControlFlowGraph, root_node: pg::graph::NodeIndex) {
+fn analyze_cfg(graph: &ControlFlowGraph, cfg_root: pg::graph::NodeIndex) {
     // The expressions generated in a BasicBlock
     let mut gen_map = HashMap::<Rc<BasicBlock>, HashSet<Rc<Expression>>>::new();
     // Maps a variable name to its current OptimizerToken
@@ -167,14 +158,16 @@ fn analyze_cfg(cfg: &ControlFlowGraph, root_node: pg::graph::NodeIndex) {
     // Add/overwrite function variables to maps
 
 
-    traverse_cfg(cfg, root_node, &mut gen_map, token_map, &mut id_map, &mut used_map, &mut creation_map, HashSet::new());
+    traverse_cfg(graph, cfg_root, &mut gen_map, token_map, &mut id_map, &mut used_map, &mut creation_map, HashSet::new());
 
     let dead_code = find_dead_code(&used_map, &creation_map);
+
+    println!("{:?}", dead_code);
 }
 
-fn traverse_cfg(cfg: &ControlFlowGraph, node: pg::graph::NodeIndex, gen_map: &mut HashMap<Rc<BasicBlock>, HashSet<Rc<Expression>>>, mut token_map: HashMap<Rc<String>, OptimizerToken>, id_map: &mut HashMap<Rc<String>, u64>, used_map: &mut IndexMap<OptimizerToken, bool>, creation_map: &mut HashMap<OptimizerToken, Rc<Statement>>, mut visited: HashSet<pg::graph::NodeIndex>) {
+fn traverse_cfg(graph: &ControlFlowGraph, node: pg::graph::NodeIndex, gen_map: &mut HashMap<Rc<BasicBlock>, HashSet<Rc<Expression>>>, mut token_map: HashMap<Rc<String>, OptimizerToken>, id_map: &mut HashMap<Rc<String>, u64>, used_map: &mut IndexMap<OptimizerToken, bool>, creation_map: &mut HashMap<OptimizerToken, Rc<Statement>>, mut visited: HashSet<pg::graph::NodeIndex>) {
     let mut expressions = HashSet::<Rc<Expression>>::new();
-    let block = cfg.node_weight(node).unwrap();
+    let block = graph.node_weight(node).unwrap();
 
     // Go through the BasicBlock and annotate everything
     for stmt in &block.borrow().statements {
@@ -242,9 +235,9 @@ fn traverse_cfg(cfg: &ControlFlowGraph, node: pg::graph::NodeIndex, gen_map: &mu
     visited.insert(node);
 
     // Visit all the unvisited neighbors
-    for neighbor in cfg.neighbors(node) {
+    for neighbor in graph.neighbors(node) {
         if !visited.contains(&neighbor) {
-            traverse_cfg(cfg, neighbor, gen_map, token_map.clone(), id_map, used_map, creation_map, visited.clone());
+            traverse_cfg(graph, neighbor, gen_map, token_map.clone(), id_map, used_map, creation_map, visited.clone());
         }
     }
 }
