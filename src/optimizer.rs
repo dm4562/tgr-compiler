@@ -19,7 +19,7 @@ enum OptimizerTokenType {
     Keyword
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum StmtType {
     Lvalue,
     If,
@@ -30,7 +30,7 @@ enum StmtType {
     Return
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum StmtsScope {
     Program,
     If,
@@ -282,30 +282,26 @@ fn build_vardecl_block(vardecl: NodeId, arena: &Arena<Rc<Token>>, counter: &mut 
 
 
 fn build_stmts(stmts: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64, scope: StmtsScope) -> Vec<NodeIndex> {
-    let mut node = stmts;
+    let node = stmts;
     let fullstmt_node = node.children(arena).nth(0).unwrap();
     let stmt_node = fullstmt_node.children(arena).nth(0).unwrap();
 
-    let mut outgoing_nodes = build_stmt(stmt_node, arena, graph, incoming, counter);
+    let (mut outgoing, stmt_type) = build_stmt(stmt_node, arena, graph, incoming, counter);
     if let Some(stmts_node) = stmts.children(arena).nth(1) {
-        println!("outgoing: {:?} - for {:?}", outgoing_nodes, *arena[stmt_node.children(arena).next().unwrap()].data.val);
+        println!("outgoing: {:?} - for {:?}", outgoing, *arena[stmt_node.children(arena).next().unwrap()].data.val);
 
-        outgoing_nodes = build_stmts(stmts_node, arena, graph, &outgoing_nodes, counter, scope);
+        if stmt_type == StmtType::Break &&
+            (scope == StmtsScope::For || scope == StmtsScope::While) {
+
+        } else {
+            outgoing = build_stmts(stmts_node, arena, graph, &outgoing, counter, scope);
+        }
     }
 
-    outgoing_nodes
+    outgoing
 }
 
-fn build_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64) -> Vec<NodeIndex> {
-    /* The second value tells the type of stmt
-     * 1: LVALUE := EXPR
-     * 2: if EXPR then STMTS endif / if EXPR then STMTS else STMTS endif
-     * 3: while EXPR do STMTS enddo
-     * 4: for id := EXPR to EXPR do STMTS enddo
-     * 5: break
-     * 6: return EXPR
-     */
-
+fn build_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64) -> (Vec<NodeIndex>, StmtType) {
     let first_node = stmt_node.children(arena).nth(0).unwrap();
     if first_node.children(arena).nth(0).is_some() {
         // LVALUE := EXPR (add to block and parse expr)
@@ -319,7 +315,18 @@ fn build_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFl
         } else if *first_word == "for" {
 
         } else if *first_word == "break" {
-
+            let mut block = BasicBlock::new(counter);
+            let stmt = Statement {
+                lhs: None,
+                rhs: Some(parse_expr(stmt_node, arena)),
+                node: stmt_node
+            };
+            block.statements.push(Rc::new(stmt));
+            let break_ndx = graph.add_node(RefCell::new(block));
+            for n in incoming {
+                graph.add_edge(*n, break_ndx, ());
+            }
+            return (vec![break_ndx], StmtType::Break);
         } else {
             // return
         }
@@ -327,7 +334,9 @@ fn build_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFl
     unimplemented!();
 }
 
-fn build_while_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64) -> Vec<NodeIndex> {
+
+
+fn build_while_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64) -> (Vec<NodeIndex>, StmtType) {
 
     let expr_node = stmt_node.children(arena).nth(1).expect("while EXPR not found");
     let rhs = parse_expr(expr_node, arena);
@@ -350,10 +359,10 @@ fn build_while_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut Con
         graph.add_edge(*n, expr_block_ndx, ());
     }
 
-    vec![expr_block_ndx]
+    (vec![expr_block_ndx], StmtType::While)
 }
 
-fn build_if_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64) -> Vec<NodeIndex> {
+fn build_if_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64) -> (Vec<NodeIndex>, StmtType) {
     // let expr
     let mut outgoing_nodes: Vec<NodeIndex> = Vec::new();
 
@@ -390,10 +399,10 @@ fn build_if_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut Contro
     }
 
     // println!("final outgoing: {:?}", outgoing_nodes);
-    outgoing_nodes
+    (outgoing_nodes, ret_type)
 }
 
-fn build_lvalue_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64) -> Vec<NodeIndex> {
+fn build_lvalue_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, incoming: &Vec<NodeIndex>, counter: &mut u64) -> (Vec<NodeIndex>, StmtType) {
     let first_node = stmt_node.children(arena).nth(0).unwrap();
     let id_node = first_node.children(arena).nth(0).unwrap();
     let token = OptimizerToken {
@@ -419,7 +428,7 @@ fn build_lvalue_stmt(stmt_node: NodeId, arena: &Arena<Rc<Token>>, graph: &mut Co
         graph.add_edge(*n, bi, ());
     }
 
-    vec![bi]
+    (vec![bi], StmtType::Lvalue)
 }
 // fn build_stmts(stmts: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowGraph, block_ndx: NodeIndex, counter: &mut u64) -> Vec<NodeIndex> {
 //     let mut node = stmts;
