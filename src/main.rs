@@ -13,6 +13,7 @@ mod scanner;
 mod parser;
 mod typechecker;
 mod optimizer;
+mod cfg;
 
 use clap::{Arg, App};
 use regex::Regex;
@@ -115,5 +116,5 @@ fn main() {
         Err(msg)    => eprintln!("{}", msg.to_owned())
     };
 
-    optimizer::build_cfg(&arena, ast_root);
+    cfg::build_cfg(&arena, ast_root);
 }
