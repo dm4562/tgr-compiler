@@ -4,6 +4,7 @@ use petgraph::dot::{Dot, Config};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::HashSet;
 
 use scanner::Token;
 use optimizer::{ControlFlowGraph, OptimizerToken, OptimizerTokenType, Statement, BasicBlock};
@@ -29,7 +30,7 @@ enum StmtsScope {
     Function
 }
 
-pub fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) -> (NodeIndex, ControlFlowGraph) {
+pub fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) -> (NodeIndex, ControlFlowGraph, HashSet<OptimizerToken>) {
     let mut cfg = ControlFlowGraph::new();
     let mut block_count = 0;
     let declseg_node = root_node.children(arena).nth(1).unwrap();
@@ -37,16 +38,14 @@ pub fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) -> (NodeIndex, Con
     let vardecls_node = declseg_node.children(arena).nth(1).unwrap();
     let stmts_node = root_node.children(arena).nth(3).unwrap();
 
-    let typedecls_block = build_typedecls(typedecls_node, arena, &mut block_count);
-    let typedecls_ndx = cfg.add_node(RefCell::new(typedecls_block));
-    let last_vardecls_ndx = add_vardecls_blocks(vardecls_node, arena, &mut block_count, &mut cfg, typedecls_ndx);
+    // let typedecls_block = build_typedecls(typedecls_node, arena, &mut block_count);
+    // let typedecls_ndx = cfg.add_node(RefCell::new(typedecls_block));
+    let global_vars = add_vardecls_blocks(vardecls_node, arena, &mut block_count, &mut cfg);
 
-    // let stmt_block = BasicBlock::new(&mut block_count);
-    // let stmt_block_ndx = cfg.add_node(RefCell::new(stmt_block));
-    // cfg.add_edge(last_vardecls_ndx, stmt_block_ndx, ());
-    // let outgoing_nodes = build_stmts(stmts_node, arena, &mut cfg, stmt_block_ndx, &mut block_count);
+    let stmt_block = BasicBlock::new(&mut block_count);
+    let stmt_block_ndx = cfg.add_node(RefCell::new(stmt_block));
 
-    let incoming = vec![last_vardecls_ndx];
+    let incoming = vec![stmt_block_ndx];
     let mut scopes = vec![StmtsScope::Program];
     let outgoing_nodes = build_stmts(stmts_node, arena, &mut cfg, &incoming, &mut block_count, &mut scopes);
     scopes.pop();
@@ -61,8 +60,9 @@ pub fn build_cfg(arena: &Arena<Rc<Token>>, root_node: NodeId) -> (NodeIndex, Con
     }
 
     println!("{:?}", Dot::with_config(&cfg, &[Config::EdgeNoLabel]));
+    println!("{:?}", global_vars);
 
-    (typedecls_ndx, cfg)
+    (stmt_block_ndx, cfg, global_vars)
 }
 
 
@@ -101,21 +101,21 @@ fn build_typedecl_statement(typedecl_node: NodeId, arena: &Arena<Rc<Token>>) -> 
     }
 }
 
-fn add_vardecls_blocks(vardecls: NodeId, arena: &Arena<Rc<Token>>, counter: &mut u64, graph: &mut ControlFlowGraph, parent: NodeIndex) -> NodeIndex {
+fn add_vardecls_blocks(vardecls: NodeId, arena: &Arena<Rc<Token>>, counter: &mut u64, graph: &mut ControlFlowGraph) -> HashSet<OptimizerToken> {
     let mut node = vardecls;
-    let mut node_ndx = parent;
+    let mut global_vars: HashSet<OptimizerToken> = HashSet::new();
     while let Some(vardecl_node) = node.children(arena).nth(0) {
-        let block = build_vardecl_block(vardecl_node, arena, counter);
-        let bi = graph.add_node(RefCell::new(block));
-        graph.add_edge(node_ndx, bi, ());
-        node_ndx = bi;
+        let block = build_vardecl_block(vardecl_node, arena, counter, &mut global_vars);
+        // let bi = graph.add_node(RefCell::new(block));
+        // graph.add_edge(node_ndx, bi, ());
+        // node_ndx = bi;
         node = node.children(arena).nth(1).unwrap();
     }
 
-    node_ndx
+    global_vars
 }
 
-fn build_vardecl_block(vardecl: NodeId, arena: &Arena<Rc<Token>>, counter: &mut u64) -> BasicBlock {
+fn build_vardecl_block(vardecl: NodeId, arena: &Arena<Rc<Token>>, counter: &mut u64, global_vars: &mut HashSet<OptimizerToken>) -> BasicBlock {
     let optinit_node = vardecl.children(arena).nth(4).unwrap();
     let optinit_val = optinit_node.children(arena).nth(2);
     let init_val = match optinit_val {
@@ -132,6 +132,14 @@ fn build_vardecl_block(vardecl: NodeId, arena: &Arena<Rc<Token>>, counter: &mut 
             token_type: OptimizerTokenType::Variable,
             id: 0
         };
+
+        let token2 = OptimizerToken {
+            name: (arena[id_node].data).val.clone(),
+            token_type: OptimizerTokenType::Variable,
+            id: 0
+        };
+
+        global_vars.insert(token2);
 
         let stmt = Statement {
             lhs: Some(token),
