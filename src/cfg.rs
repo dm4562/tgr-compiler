@@ -159,7 +159,7 @@ fn build_stmts(stmts: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowG
     let fullstmt_node = node.children(arena).nth(0).unwrap();
     let stmt_node = fullstmt_node.children(arena).nth(0).unwrap();
 
-    let (stmt_outgoing, stmt_type) = build_stmt(stmt_node, arena, graph, incoming, counter, scopes);
+    let (mut stmt_outgoing, stmt_type) = build_stmt(stmt_node, arena, graph, incoming, counter, scopes);
     let mut outgoing= Vec::new();
     println!("scope: {:?} | stmt: {:?}", scopes, &stmt_type);
     if let Some(stmts_node) = stmts.children(arena).nth(1) {
@@ -183,6 +183,8 @@ fn build_stmts(stmts: NodeId, arena: &Arena<Rc<Token>>, graph: &mut ControlFlowG
             outgoing.append(&mut build_stmts(stmts_node, arena, graph, &stmts_incoming, counter, scopes));
         }
 
+    } else {
+        outgoing.append(&mut stmt_outgoing);
     }
 
     outgoing
